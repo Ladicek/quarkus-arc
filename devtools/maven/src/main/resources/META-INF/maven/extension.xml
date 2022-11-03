@@ -1,6 +1,0 @@
-<extension>
-    <exportedPackages>
-        <exportedPackage>io.quarkus.maven</exportedPackage>
-        <exportedPackage>io.quarkus.maven.components</exportedPackage>
-    </exportedPackages>
-</extension>
