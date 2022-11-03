@@ -1,6 +1,0 @@
-name: Quarkus Flyway PostgreSQL
-artifact: ${project.groupId}:${project.artifactId}:${project.version}
-description: Conditional extension added when Flyway and PostgreSQL extensions are present
-metadata:
-   unlisted: true
-
