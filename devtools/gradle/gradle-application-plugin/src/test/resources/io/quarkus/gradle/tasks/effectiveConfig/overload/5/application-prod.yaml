@@ -1,4 +1,0 @@
-"%prod":
-  quarkus:
-    prop:
-      overload: 'from-yaml-prod'

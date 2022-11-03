@@ -1,6 +1,0 @@
-namespace test;
-
-record NamedSchemaRecord {
-    string name;
-    string description;
-}

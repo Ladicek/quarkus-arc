@@ -1,9 +1,0 @@
----
-artifact: ${project.groupId}:${project.artifactId}:${project.version}
-name: "Quarkus Dev UI"
-metadata:
-  keywords:
-  - "devui"
-  status: "stable"
-  unlisted: true
-  hide-in-dev-ui: true
