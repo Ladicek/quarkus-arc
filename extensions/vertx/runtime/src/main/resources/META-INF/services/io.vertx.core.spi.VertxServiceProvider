@@ -1,3 +1,0 @@
-io.quarkus.vertx.core.runtime.ContextLocalsVertxServiceProvider
-io.quarkus.vertx.core.runtime.VertxMDCServiceProvider
-io.quarkus.vertx.core.runtime.context.VertxContextSafetyToggle

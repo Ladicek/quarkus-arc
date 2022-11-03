@@ -1,8 +1,0 @@
-quarkus:
-  application:
-    name: module-b
-  datasource:
-    "ds-b":
-      db-kind: mysql
-      jdbc:
-        driver: com.mysql.cj.jdbc.Driver

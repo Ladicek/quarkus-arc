@@ -1,9 +1,0 @@
----
-artifact: ${project.groupId}:${project.artifactId}:${project.version}
-name: "JLink"
-metadata:
-  categories:
-  - "packaging"
-  status: "experimental"
-  config:
-  - "quarkus.jlink."

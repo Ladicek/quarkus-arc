@@ -1,6 +1,0 @@
-package io.quarkus.it.extension;
-
-@QuarkusTestExtensionMetaAnnotationL2
-public class QuarkusTestExtensionMetaAnnotationHierarchyDepth2Test extends AbstractQuarkusTestMetaAnnotationTest {
-
-}
