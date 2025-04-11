@@ -7,10 +7,7 @@ import org.jboss.logging.Logger;
 import io.quarkus.arc.InjectableContext;
 import io.quarkus.arc.processor.CustomAlterableContexts.CustomAlterableContextInfo;
 import io.quarkus.arc.processor.ResourceOutput.Resource;
-import io.quarkus.gizmo.ClassCreator;
-import io.quarkus.gizmo.ClassOutput;
-import io.quarkus.gizmo.MethodCreator;
-import io.quarkus.gizmo.MethodDescriptor;
+import io.quarkus.gizmo2.Gizmo;
 
 /**
  * This is an internal companion of {@link CustomAlterableContexts} that handles generating
@@ -36,44 +33,51 @@ class CustomAlterableContextsGenerator extends AbstractGenerator {
         return classOutput.getResources();
     }
 
-    private void createInjectableContextSubclass(ClassOutput classOutput, CustomAlterableContextInfo info) {
-        String generatedName = info.generatedName.replace('.', '/');
+    private void createInjectableContextSubclass(ResourceClassOutput classOutput, CustomAlterableContextInfo info) {
+        Gizmo gizmo = Gizmo.create(classOutput);
+        gizmo.class_(info.generatedName, cc -> {
+            cc.extends_(info.contextClass);
+            cc.implements_(InjectableContext.class);
 
-        ClassCreator injectableContextSubclass = ClassCreator.builder()
-                .classOutput(classOutput)
-                .className(generatedName)
-                .superClass(info.contextClass)
-                .interfaces(InjectableContext.class)
-                .build();
+            cc.defaultConstructor();
 
-        // constructor
-        MethodCreator constructor = injectableContextSubclass.getMethodCreator(Methods.INIT, void.class);
-        constructor.invokeSpecialMethod(MethodDescriptor.ofConstructor(info.contextClass), constructor.getThis());
-        constructor.returnVoid();
+            // implement `isNormal()` if needed
+            if (info.isNormal != null) {
+                cc.method("isNormal", mc -> {
+                    mc.returning(boolean.class);
+                    mc.body(bc -> {
+                        bc.return_(info.isNormal);
+                    });
+                });
+            }
 
-        // implement `isNormal()` if needed
-        if (info.isNormal != null) {
-            MethodCreator isNormal = injectableContextSubclass.getMethodCreator("isNormal", boolean.class);
-            isNormal.returnBoolean(info.isNormal);
-        }
+            // implement `destroy()`
+            cc.method("destroy", mc -> {
+                mc.returning(void.class);
+                mc.body(bc -> {
+                    bc.throw_(UnsupportedOperationException.class, "Custom AlterableContext cannot destroy all instances");
+                });
+            });
 
-        // implement `destroy()`
-        MethodCreator destroy = injectableContextSubclass.getMethodCreator("destroy", void.class);
-        destroy.throwException(UnsupportedOperationException.class, "Custom AlterableContext cannot destroy all instances");
-        destroy.returnVoid();
+            // implement `getState()`
+            cc.method("getState", mc -> {
+                mc.returning(InjectableContext.ContextState.class);
+                mc.body(bc -> {
+                    bc.throw_(UnsupportedOperationException.class, "Custom AlterableContext has no state");
 
-        // implement `getState()`
-        MethodCreator getState = injectableContextSubclass.getMethodCreator("getState", InjectableContext.ContextState.class);
-        getState.throwException(UnsupportedOperationException.class, "Custom AlterableContext has no state");
-        getState.returnNull();
+                });
+            });
 
-        // implement `destroy(ContextState)`
-        MethodCreator destroyState = injectableContextSubclass.getMethodCreator("destroy", void.class,
-                InjectableContext.ContextState.class);
-        destroyState.throwException(UnsupportedOperationException.class, "Custom AlterableContext has no state");
-        destroyState.returnVoid();
+            // implement `destroy(ContextState)`
+            cc.method("destroy", mc -> {
+                mc.returning(void.class);
+                mc.parameter("state", InjectableContext.ContextState.class);
+                mc.body(bc -> {
+                    bc.throw_(UnsupportedOperationException.class, "Custom AlterableContext has no state");
+                });
+            });
+        });
 
-        injectableContextSubclass.close();
         LOGGER.debugf("InjectableContext subclass generated: %s", info.generatedName);
     }
 }
