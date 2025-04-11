@@ -996,7 +996,17 @@ public class BeanGenerator extends AbstractGenerator {
             doDestroy.returnValue(null);
 
         } else if (bean.isSynthetic()) {
-            bean.getDestroyerConsumer().accept(doDestroy);
+            MethodCreator destroySynthetic = beanCreator
+                    .getMethodCreator("destroySynthetic", void.class, providerType.descriptorName(),
+                            SyntheticCreationalContext.class)
+                    .setModifiers(ACC_PRIVATE);
+            bean.getDestroyerConsumer().accept(destroySynthetic);
+
+            ResultHandle syntheticCreationalContext = createSyntheticCreationalContext(beanCreator, doDestroy, bean,
+                    injectionPointToProviderField, 1);
+            doDestroy.invokeVirtualMethod(destroySynthetic.getMethodDescriptor(), doDestroy.getThis(),
+                    doDestroy.getMethodParam(0), syntheticCreationalContext);
+            doDestroy.returnVoid();
         }
 
         MethodCreator destroy = beanCreator
@@ -1142,16 +1152,49 @@ public class BeanGenerator extends AbstractGenerator {
                     msg.callToString()));
         }
 
+        ResultHandle syntheticCreationalContext = createSyntheticCreationalContext(beanCreator, doCreate, bean,
+                injectionPointToProviderSupplierField, 0);
+
+        AssignableResultHandle ret = doCreate.createVariable(providerType.descriptorName());
+        TryBlock tryBlock = doCreate.tryBlock();
+        tryBlock.assign(ret, tryBlock.invokeVirtualMethod(createSynthetic.getMethodDescriptor(), tryBlock.getThis(),
+                syntheticCreationalContext));
+        CatchBlockCreator catchBlock = tryBlock.addCatch(Exception.class);
+        StringBuilderGenerator strBuilder = Gizmo.newStringBuilder(catchBlock);
+        strBuilder.append("Error creating synthetic bean [");
+        strBuilder.append(bean.getIdentifier());
+        strBuilder.append("]: ");
+        strBuilder.append(Gizmo.toString(catchBlock, catchBlock.getCaughtException()));
+        ResultHandle exception = catchBlock.newInstance(
+                MethodDescriptor.ofConstructor(CreationException.class, String.class, Throwable.class),
+                strBuilder.callToString(), catchBlock.getCaughtException());
+        catchBlock.throwException(exception);
+
+        if (bean.getScope().isNormal()) {
+            // Normal scoped synthetic beans should never return null
+            BytecodeCreator nullBeanInstance = doCreate.ifNull(ret).trueBranch();
+            StringBuilderGenerator message = Gizmo.newStringBuilder(nullBeanInstance);
+            message.append("Null contextual instance was produced by a normal scoped synthetic bean: ");
+            message.append(Gizmo.toString(nullBeanInstance, nullBeanInstance.getThis()));
+            ResultHandle e = nullBeanInstance.newInstance(
+                    MethodDescriptor.ofConstructor(CreationException.class, String.class), message.callToString());
+            nullBeanInstance.throwException(e);
+        }
+        doCreate.returnValue(ret);
+    }
+
+    private ResultHandle createSyntheticCreationalContext(ClassCreator beanCreator, MethodCreator method, BeanInfo bean,
+            Map<InjectionPointInfo, String> injectionPointToProviderSupplierField, int creationalContextParam) {
         ResultHandle injectedReferences;
         if (injectionPointToProviderSupplierField.isEmpty()) {
-            injectedReferences = doCreate.invokeStaticMethod(MethodDescriptors.COLLECTIONS_EMPTY_MAP);
+            injectedReferences = method.invokeStaticMethod(MethodDescriptors.COLLECTIONS_EMPTY_MAP);
         } else {
             // Initialize injected references
-            injectedReferences = doCreate.newInstance(MethodDescriptor.ofConstructor(HashMap.class));
-            ResultHandle tccl = doCreate.invokeVirtualMethod(MethodDescriptors.THREAD_GET_TCCL,
-                    doCreate.invokeStaticMethod(MethodDescriptors.THREAD_CURRENT_THREAD));
+            injectedReferences = method.newInstance(MethodDescriptor.ofConstructor(HashMap.class));
+            ResultHandle tccl = method.invokeVirtualMethod(MethodDescriptors.THREAD_GET_TCCL,
+                    method.invokeStaticMethod(MethodDescriptors.THREAD_CURRENT_THREAD));
             for (InjectionPointInfo injectionPoint : bean.getAllInjectionPoints()) {
-                TryBlock tryBlock = doCreate.tryBlock();
+                TryBlock tryBlock = method.tryBlock();
                 ResultHandle requiredType;
                 try {
                     IndexView index = bean.getDeployment().getBeanArchiveIndex();
@@ -1191,7 +1234,7 @@ public class BeanGenerator extends AbstractGenerator {
                 ResultHandle providerHandle = tryBlock.invokeInterfaceMethod(
                         MethodDescriptors.SUPPLIER_GET, providerSupplierHandle);
                 ResultHandle childCtxHandle = tryBlock.invokeStaticMethod(MethodDescriptors.CREATIONAL_CTX_CHILD_CONTEXTUAL,
-                        providerHandle, tryBlock.getMethodParam(0));
+                        providerHandle, tryBlock.getMethodParam(creationalContextParam));
                 AssignableResultHandle injectedReference = tryBlock.createVariable(Object.class);
                 tryBlock.assign(injectedReference, tryBlock.invokeInterfaceMethod(
                         MethodDescriptors.INJECTABLE_REF_PROVIDER_GET,
@@ -1206,40 +1249,13 @@ public class BeanGenerator extends AbstractGenerator {
                         catchBlock.getCaughtException());
             }
         }
-        ResultHandle paramsHandle = doCreate.readInstanceField(
-                FieldDescriptor.of(doCreate.getMethodDescriptor().getDeclaringClass(), "params", Map.class),
-                doCreate.getThis());
-        ResultHandle syntheticCreationalContext = doCreate.newInstance(
+        ResultHandle paramsHandle = method.readInstanceField(
+                FieldDescriptor.of(method.getMethodDescriptor().getDeclaringClass(), "params", Map.class),
+                method.getThis());
+        return method.newInstance(
                 MethodDescriptor.ofConstructor(SyntheticCreationalContextImpl.class, CreationalContext.class, Map.class,
                         Map.class),
-                doCreate.getMethodParam(0), paramsHandle, injectedReferences);
-
-        AssignableResultHandle ret = doCreate.createVariable(providerType.descriptorName());
-        TryBlock tryBlock = doCreate.tryBlock();
-        tryBlock.assign(ret, tryBlock.invokeVirtualMethod(createSynthetic.getMethodDescriptor(), tryBlock.getThis(),
-                syntheticCreationalContext));
-        CatchBlockCreator catchBlock = tryBlock.addCatch(Exception.class);
-        StringBuilderGenerator strBuilder = Gizmo.newStringBuilder(catchBlock);
-        strBuilder.append("Error creating synthetic bean [");
-        strBuilder.append(bean.getIdentifier());
-        strBuilder.append("]: ");
-        strBuilder.append(Gizmo.toString(catchBlock, catchBlock.getCaughtException()));
-        ResultHandle exception = catchBlock.newInstance(
-                MethodDescriptor.ofConstructor(CreationException.class, String.class, Throwable.class),
-                strBuilder.callToString(), catchBlock.getCaughtException());
-        catchBlock.throwException(exception);
-
-        if (bean.getScope().isNormal()) {
-            // Normal scoped synthetic beans should never return null
-            BytecodeCreator nullBeanInstance = doCreate.ifNull(ret).trueBranch();
-            StringBuilderGenerator message = Gizmo.newStringBuilder(nullBeanInstance);
-            message.append("Null contextual instance was produced by a normal scoped synthetic bean: ");
-            message.append(Gizmo.toString(nullBeanInstance, nullBeanInstance.getThis()));
-            ResultHandle e = nullBeanInstance.newInstance(
-                    MethodDescriptor.ofConstructor(CreationException.class, String.class), message.callToString());
-            nullBeanInstance.throwException(e);
-        }
-        doCreate.returnValue(ret);
+                method.getMethodParam(creationalContextParam), paramsHandle, injectedReferences);
     }
 
     private void newProviderHandles(BeanInfo bean, ClassCreator beanCreator, MethodCreator createMethod,
