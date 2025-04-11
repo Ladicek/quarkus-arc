@@ -2,6 +2,7 @@ package io.quarkus.arc.processor;
 
 import java.io.StringWriter;
 import java.io.Writer;
+import java.lang.constant.ClassDesc;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -10,12 +11,11 @@ import java.util.function.Function;
 
 import io.quarkus.arc.processor.ResourceOutput.Resource;
 import io.quarkus.arc.processor.ResourceOutput.Resource.SpecialType;
-import io.quarkus.gizmo.ClassOutput;
 
 /**
  *
  */
-public class ResourceClassOutput implements ClassOutput {
+public class ResourceClassOutput implements io.quarkus.gizmo.ClassOutput, io.quarkus.gizmo2.ClassOutput {
 
     private static final Function<String, SpecialType> NO_SPECIAL_TYPE = cn -> null;
 
@@ -49,7 +49,7 @@ public class ResourceClassOutput implements ClassOutput {
             sources.put(className, writer);
             return writer;
         }
-        return ClassOutput.super.getSourceWriter(className);
+        return io.quarkus.gizmo.ClassOutput.super.getSourceWriter(className);
     }
 
     List<Resource> getResources() {
@@ -64,4 +64,12 @@ public class ResourceClassOutput implements ClassOutput {
         return source != null ? source.toString() : null;
     }
 
+    // --- Gizmo 2 ---
+
+    @Override
+    public void write(ClassDesc desc, byte[] bytes) {
+        String name = desc.packageName().replace('.', '/') + "/" + desc.displayName();
+        resources.add(ResourceImpl.javaClass(name, bytes, specialTypeFunction.apply(name),
+                applicationClass, null));
+    }
 }
