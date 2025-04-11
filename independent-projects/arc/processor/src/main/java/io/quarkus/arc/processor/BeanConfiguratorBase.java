@@ -31,7 +31,6 @@ import io.quarkus.arc.InjectableReferenceProvider;
 import io.quarkus.arc.InterceptionProxy;
 import io.quarkus.arc.SyntheticCreationalContext;
 import io.quarkus.arc.processor.InjectionPointInfo.TypeAndQualifiers;
-import io.quarkus.gizmo.FieldDescriptor;
 import io.quarkus.gizmo.MethodCreator;
 import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
@@ -458,20 +457,29 @@ public abstract class BeanConfiguratorBase<THIS extends BeanConfiguratorBase<THI
 
     public <U extends T> THIS destroyer(Class<? extends BeanDestroyer<U>> destroyerClazz) {
         return destroyer(mc -> {
-            // new FooBeanDestroyer().destroy(instance, context, params)
-            ResultHandle paramsHandle = mc.readInstanceField(
-                    FieldDescriptor.of(mc.getMethodDescriptor().getDeclaringClass(), "params", Map.class),
-                    mc.getThis());
+            // new FooBeanDestroyer().destroy(instance, syntheticCreationalContext)
             ResultHandle destoyerHandle = mc.newInstance(MethodDescriptor.ofConstructor(destroyerClazz));
-            ResultHandle[] params = { mc.getMethodParam(0), mc.getMethodParam(1), paramsHandle };
             mc.invokeInterfaceMethod(
-                    MethodDescriptor.ofMethod(BeanDestroyer.class, "destroy", void.class, Object.class, CreationalContext.class,
-                            Map.class),
-                    destoyerHandle, params);
-            mc.returnValue(null);
+                    MethodDescriptor.ofMethod(BeanDestroyer.class, "destroy", void.class, Object.class,
+                            SyntheticCreationalContext.class),
+                    destoyerHandle, mc.getMethodParam(0), mc.getMethodParam(1));
+            mc.returnVoid();
         });
     }
 
+    /**
+     * The first method parameter is the destroyed instance.
+     * <p>
+     * The second method parameter is the synthetic creational context, i.e. the {@code MethodCreator#getMethodParam(1)} returns
+     * a {@link SyntheticCreationalContext} instance that can be used to obtain contextual references for synthetic injection
+     * points and build-time parameters.
+     * <p>
+     * Furthermore, the consumer can also read the instance field of name {@code params} and type {@link Map}. This map holds
+     * all parameters set via one of the {@code BeanConfigurator#param()} methods.
+     *
+     * @param methodCreatorConsumer
+     * @return self
+     */
     public THIS destroyer(Consumer<MethodCreator> methodCreatorConsumer) {
         this.destroyerConsumer = methodCreatorConsumer;
         return cast(this);
