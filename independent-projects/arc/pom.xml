@@ -45,6 +45,7 @@
         <version.jta>2.0.1</version.jta>
         <!-- main versions -->
         <version.gizmo>1.9.0</version.gizmo>
+        <version.gizmo2>2.0.0-SNAPSHOT</version.gizmo2>
         <version.jandex>3.3.1</version.jandex>
         <version.jboss-logging>3.6.1.Final</version.jboss-logging>
         <version.mutiny>2.8.0</version.mutiny>
@@ -143,6 +144,11 @@
                 <artifactId>gizmo</artifactId>
                 <version>${version.gizmo}</version>
             </dependency>
+            <dependency>
+                <groupId>io.quarkus.gizmo</groupId>
+                <artifactId>gizmo2</artifactId>
+                <version>${version.gizmo2}</version>
+            </dependency>
 
             <dependency>
                 <groupId>io.smallrye.reactive</groupId>
@@ -197,6 +203,13 @@
                 <groupId>io.quarkus.gizmo</groupId>
                 <artifactId>gizmo</artifactId>
                 <version>${version.gizmo}</version>
+                <type>test-jar</type>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.quarkus.gizmo</groupId>
+                <artifactId>gizmo2</artifactId>
+                <version>${version.gizmo2}</version>
                 <type>test-jar</type>
                 <scope>test</scope>
             </dependency>
