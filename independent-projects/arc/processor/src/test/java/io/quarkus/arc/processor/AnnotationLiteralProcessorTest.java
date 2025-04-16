@@ -7,23 +7,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.lang.constant.ClassDesc;
 import java.util.Collection;
 import java.util.Collections;
 
 import jakarta.enterprise.util.AnnotationLiteral;
 
 import org.jboss.jandex.AnnotationInstance;
-import org.jboss.jandex.DotName;
 import org.jboss.jandex.Index;
 import org.jboss.jandex.IndexView;
 import org.junit.jupiter.api.Test;
-import org.objectweb.asm.Opcodes;
 
 import io.quarkus.arc.AbstractAnnotationLiteral;
-import io.quarkus.gizmo.ClassCreator;
-import io.quarkus.gizmo.MethodCreator;
-import io.quarkus.gizmo.ResultHandle;
-import io.quarkus.gizmo.TestClassLoader;
+import io.quarkus.gizmo2.Gizmo;
+import io.quarkus.gizmo2.TestClassMaker;
 
 public class AnnotationLiteralProcessorTest {
     public enum SimpleEnum {
@@ -300,26 +297,29 @@ public class AnnotationLiteralProcessorTest {
     public void test() throws ReflectiveOperationException {
         AnnotationLiteralProcessor literals = new AnnotationLiteralProcessor(index, ignored -> true);
 
-        TestClassLoader cl = new TestClassLoader(getClass().getClassLoader());
-        try (ClassCreator creator = ClassCreator.builder().classOutput(cl).className(generatedClass).build()) {
-            MethodCreator method = creator.getMethodCreator("get", ComplexAnnotation.class)
-                    .setModifiers(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC);
-            ResultHandle annotation = literals.create(method,
-                    index.getClassByName(DotName.createSimple(ComplexAnnotation.class.getName())), complexAnnotationJandex());
-            method.returnValue(annotation);
-        }
+        TestClassMaker tcm = new TestClassMaker();
+        Gizmo gizmo = Gizmo.create(tcm);
+        ClassDesc desc = gizmo.class_(generatedClass, cc -> {
+            cc.staticMethod("get", mc -> {
+                mc.public_();
+                mc.returning(ComplexAnnotation.class);
+                mc.body(bc -> {
+                    bc.return_(literals.create(bc, index.getClassByName(ComplexAnnotation.class), complexAnnotationJandex()));
+                });
+            });
+        });
 
         Collection<ResourceOutput.Resource> resources = new AnnotationLiteralGenerator(false)
                 .generate(literals.getCache(), Collections.emptySet());
         for (ResourceOutput.Resource resource : resources) {
             if (resource.getType() == ResourceOutput.Resource.Type.JAVA_CLASS) {
-                cl.write(resource.getName(), resource.getData());
+                tcm.write(ClassDesc.of(resource.getName().replace('/', '.')), resource.getData());
             } else {
                 throw new IllegalStateException("Unexpected " + resource.getType() + " " + resource.getName());
             }
         }
 
-        Class<?> clazz = cl.loadClass(generatedClass);
+        Class<?> clazz = tcm.loadClass(desc);
         ComplexAnnotation annotation = (ComplexAnnotation) clazz.getMethod("get").invoke(null);
         verify(annotation);
 
@@ -342,26 +342,30 @@ public class AnnotationLiteralProcessorTest {
     public void memberless() throws ReflectiveOperationException {
         AnnotationLiteralProcessor literals = new AnnotationLiteralProcessor(index, ignored -> true);
 
-        TestClassLoader cl = new TestClassLoader(getClass().getClassLoader());
-        try (ClassCreator creator = ClassCreator.builder().classOutput(cl).className(generatedClass).build()) {
-            MethodCreator method = creator.getMethodCreator("get", MemberlessAnnotation.class)
-                    .setModifiers(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC);
-            ResultHandle annotation = literals.create(method, index.getClassByName(MemberlessAnnotation.class),
-                    AnnotationInstance.builder(MemberlessAnnotation.class).build());
-            method.returnValue(annotation);
-        }
+        TestClassMaker tcm = new TestClassMaker();
+        Gizmo gizmo = Gizmo.create(tcm);
+        ClassDesc desc = gizmo.class_(generatedClass, cc -> {
+            cc.staticMethod("get", mc -> {
+                mc.public_();
+                mc.returning(MemberlessAnnotation.class);
+                mc.body(bc -> {
+                    bc.return_(literals.create(bc, index.getClassByName(MemberlessAnnotation.class),
+                            AnnotationInstance.builder(MemberlessAnnotation.class).build()));
+                });
+            });
+        });
 
         Collection<ResourceOutput.Resource> resources = new AnnotationLiteralGenerator(false)
                 .generate(literals.getCache(), Collections.emptySet());
         for (ResourceOutput.Resource resource : resources) {
             if (resource.getType() == ResourceOutput.Resource.Type.JAVA_CLASS) {
-                cl.write(resource.getName(), resource.getData());
+                tcm.write(ClassDesc.of(resource.getName().replace('/', '.')), resource.getData());
             } else {
                 throw new IllegalStateException("Unexpected " + resource.getType() + " " + resource.getName());
             }
         }
 
-        Class<?> clazz = cl.loadClass(generatedClass);
+        Class<?> clazz = tcm.loadClass(desc);
         MemberlessAnnotation annotation = (MemberlessAnnotation) clazz.getMethod("get").invoke(null);
 
         assertTrue(annotation instanceof AbstractAnnotationLiteral);
@@ -394,29 +398,39 @@ public class AnnotationLiteralProcessorTest {
     public void missingAnnotationClass() {
         AnnotationLiteralProcessor literals = new AnnotationLiteralProcessor(index, ignored -> true);
 
-        TestClassLoader cl = new TestClassLoader(getClass().getClassLoader());
-        try (ClassCreator creator = ClassCreator.builder().classOutput(cl).className(generatedClass).build()) {
-            MethodCreator method = creator.getMethodCreator("hello", void.class);
-
-            assertThrows(NullPointerException.class, () -> {
-                literals.create(method, null, simpleAnnotationJandex("foobar"));
+        TestClassMaker tcm = new TestClassMaker();
+        Gizmo gizmo = Gizmo.create(tcm);
+        gizmo.class_(generatedClass, cc -> {
+            cc.staticMethod("get", mc -> {
+                mc.public_();
+                mc.body(bc -> {
+                    assertThrows(NullPointerException.class, () -> {
+                        literals.create(bc, null, simpleAnnotationJandex("foobar"));
+                    });
+                    bc.return_();
+                });
             });
-        }
+        });
     }
 
     @Test
     public void classRetainedAnnotation() {
         AnnotationLiteralProcessor literals = new AnnotationLiteralProcessor(index, ignored -> true);
 
-        TestClassLoader cl = new TestClassLoader(getClass().getClassLoader());
-        try (ClassCreator creator = ClassCreator.builder().classOutput(cl).className(generatedClass).build()) {
-            MethodCreator method = creator.getMethodCreator("hello", void.class);
-
-            assertThrows(IllegalArgumentException.class, () -> {
-                literals.create(method, Index.singleClass(ClassRetainedAnnotation.class),
-                        AnnotationInstance.builder(ClassRetainedAnnotation.class).build());
+        TestClassMaker tcm = new TestClassMaker();
+        Gizmo gizmo = Gizmo.create(tcm);
+        gizmo.class_(generatedClass, cc -> {
+            cc.staticMethod("get", mc -> {
+                mc.public_();
+                mc.body(bc -> {
+                    assertThrows(IllegalArgumentException.class, () -> {
+                        literals.create(bc, Index.singleClass(ClassRetainedAnnotation.class),
+                                AnnotationInstance.builder(ClassRetainedAnnotation.class).build());
+                    });
+                    bc.return_();
+                });
             });
-        }
+        });
     }
 
     private static void verify(ComplexAnnotation ann) {
