@@ -1,11 +1,13 @@
 package io.quarkus.arc.processor;
 
 import static io.quarkus.arc.processor.IndexClassLookupUtils.getClassByName;
+import static io.quarkus.arc.processor.Jandex2Gizmo.methodDescOf;
 import static io.quarkus.arc.processor.KotlinUtils.isKotlinMethod;
 import static org.objectweb.asm.Opcodes.ACC_FINAL;
 import static org.objectweb.asm.Opcodes.ACC_PRIVATE;
 import static org.objectweb.asm.Opcodes.ACC_VOLATILE;
 
+import java.lang.constant.ClassDesc;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -63,6 +65,11 @@ import io.quarkus.gizmo.MethodCreator;
 import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
 import io.quarkus.gizmo.TryBlock;
+import io.quarkus.gizmo2.Expr;
+import io.quarkus.gizmo2.ParamVar;
+import io.quarkus.gizmo2.creator.BlockCreator;
+import io.quarkus.gizmo2.desc.ClassMethodDesc;
+import io.quarkus.gizmo2.desc.MethodDesc;
 
 /**
  * A subclass is generated for any intercepted/decorated bean.
@@ -885,6 +892,33 @@ public class SubclassGenerator extends AbstractGenerator {
         MethodDescriptor virtualMethod = MethodDescriptor.ofMethod(providerTypeName, methodDescriptor.getName(),
                 methodDescriptor.getReturnType(), methodDescriptor.getParameterTypes());
         forward.returnValue(forwardInvokeGenerator.generate(forward, virtualMethod, params));
+        return forwardDescriptor;
+    }
+
+    // Gizmo 2 variant of `ForwardInvokeGenerator`
+    @FunctionalInterface
+    interface ForwardInvokeGenerator_2 {
+        Expr generate(BlockCreator bc, MethodDesc virtualMethod, Expr[] params);
+    }
+
+    // Gizmo 2 variant of createForwardingMethod()
+    static MethodDesc createForwardingMethod_2(io.quarkus.gizmo2.creator.ClassCreator subclass, String providerTypeName,
+            MethodInfo method, ForwardInvokeGenerator_2 forwardInvokeGenerator) {
+        MethodDesc methodDesc = methodDescOf(method);
+        String forwardMethodName = method.name() + "$$superforward";
+        MethodDesc forwardDescriptor = ClassMethodDesc.of(subclass.type(), forwardMethodName, methodDesc.type());
+        subclass.method(forwardMethodName, mc -> {
+            mc.returning(methodDesc.returnType());
+            ParamVar[] params = new ParamVar[methodDesc.parameterCount()];
+            for (int i = 0; i < methodDesc.parameterCount(); i++) {
+                params[i] = mc.parameter("param" + i, methodDesc.parameterType(i));
+            }
+            mc.body(bc -> {
+                ClassMethodDesc virtualMethod = ClassMethodDesc.of(ClassDesc.of(providerTypeName),
+                        methodDesc.name(), methodDesc.type());
+                bc.return_(forwardInvokeGenerator.generate(bc, virtualMethod, params));
+            });
+        });
         return forwardDescriptor;
     }
 

@@ -1,5 +1,11 @@
 package io.quarkus.arc.processor;
 
+import static io.quarkus.arc.processor.Jandex2Gizmo.classDescOf;
+import static io.quarkus.arc.processor.Jandex2Gizmo.methodDescOf;
+
+import java.lang.constant.ClassDesc;
+import java.lang.constant.ConstantDescs;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -29,14 +35,20 @@ import io.quarkus.arc.impl.InterceptedMethodMetadata;
 import io.quarkus.arc.processor.ResourceOutput.Resource;
 import io.quarkus.gizmo.BytecodeCreator;
 import io.quarkus.gizmo.ClassCreator;
-import io.quarkus.gizmo.ClassOutput;
 import io.quarkus.gizmo.FieldCreator;
 import io.quarkus.gizmo.FieldDescriptor;
 import io.quarkus.gizmo.FunctionCreator;
-import io.quarkus.gizmo.Gizmo;
 import io.quarkus.gizmo.MethodCreator;
 import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
+import io.quarkus.gizmo2.Constant;
+import io.quarkus.gizmo2.Expr;
+import io.quarkus.gizmo2.Gizmo;
+import io.quarkus.gizmo2.LocalVar;
+import io.quarkus.gizmo2.ParamVar;
+import io.quarkus.gizmo2.desc.ConstructorDesc;
+import io.quarkus.gizmo2.desc.FieldDesc;
+import io.quarkus.gizmo2.desc.MethodDesc;
 
 public class InterceptionProxyGenerator extends AbstractGenerator {
     private static final String INTERCEPTION_SUBCLASS = "_InterceptionSubclass";
@@ -67,9 +79,11 @@ public class InterceptionProxyGenerator extends AbstractGenerator {
         ResourceClassOutput classOutput = new ResourceClassOutput(applicationClassPredicate.test(bean.getBeanClass()),
                 specialTypeFunction, generateSources);
 
-        createInterceptionProxyProvider(classOutput, bean);
-        createInterceptionProxy(classOutput, bean);
-        createInterceptionSubclass(classOutput, bean.getInterceptionProxy());
+        Gizmo gizmo = Gizmo.create(classOutput);
+
+        createInterceptionProxyProvider(gizmo, bean);
+        createInterceptionProxy(gizmo, bean);
+        createInterceptionSubclass(gizmo, bean.getInterceptionProxy());
 
         return classOutput.getResources();
     }
@@ -88,82 +102,164 @@ public class InterceptionProxyGenerator extends AbstractGenerator {
         return interceptionProxy.getTargetClass() + INTERCEPTION_SUBCLASS;
     }
 
-    private void createInterceptionProxyProvider(ClassOutput classOutput, BeanInfo bean) {
-        try (ClassCreator clazz = ClassCreator.builder()
-                .classOutput(classOutput)
-                .className(interceptionProxyProviderName(bean))
-                .interfaces(Supplier.class, InjectableReferenceProvider.class)
-                .build()) {
+    private void createInterceptionProxyProvider(Gizmo gizmo, BeanInfo bean) {
+        gizmo.class_(interceptionProxyProviderName(bean), cc -> {
+            cc.implements_(Supplier.class);
+            cc.implements_(InjectableReferenceProvider.class);
 
             // Supplier
-            MethodCreator get0 = clazz.getMethodCreator("get", Object.class);
-            get0.returnValue(get0.getThis());
+            cc.method("get", mc -> {
+                mc.public_();
+                mc.returning(Object.class);
+                mc.body(bc -> bc.return_(cc.this_()));
+            });
 
             // InjectableReferenceProvider
-            MethodCreator get1 = clazz.getMethodCreator("get", Object.class, CreationalContext.class);
-            String targetName = interceptionProxyName(bean);
-            ResultHandle result = get1.newInstance(MethodDescriptor.ofConstructor(targetName, CreationalContext.class),
-                    get1.getMethodParam(0));
-            get1.returnValue(result);
-        }
+            cc.method("get", mc -> {
+                mc.public_();
+                mc.returning(Object.class);
+                ParamVar creationalContext = mc.parameter("creationalContext", CreationalContext.class);
+                mc.body(bc -> {
+                    ConstructorDesc ctor = ConstructorDesc.of(ClassDesc.of(interceptionProxyName(bean)),
+                            ClassDesc.of(CreationalContext.class.getName()));
+                    bc.return_(bc.new_(ctor, creationalContext));
+                });
+            });
+        });
     }
 
-    private void createInterceptionProxy(ClassOutput classOutput, BeanInfo bean) {
-        try (ClassCreator clazz = ClassCreator.builder()
-                .classOutput(classOutput)
-                .className(interceptionProxyName(bean))
-                .interfaces(InterceptionProxy.class)
-                .build()) {
+    private void createInterceptionProxy(Gizmo gizmo, BeanInfo bean) {
+        gizmo.class_(interceptionProxyName(bean), cc -> {
+            cc.implements_(InterceptionProxy.class);
 
-            FieldCreator cc = clazz.getFieldCreator("creationalContext", CreationalContext.class)
-                    .setModifiers(Opcodes.ACC_PRIVATE | Opcodes.ACC_FINAL);
+            FieldDesc ccField = cc.field("creationalContext", fc -> {
+                fc.private_();
+                fc.final_();
+                fc.withType(CreationalContext.class);
+            });
 
-            MethodCreator ctor = clazz.getConstructorCreator(CreationalContext.class);
-            ctor.invokeSpecialMethod(MethodDescriptor.ofConstructor(Object.class), ctor.getThis());
-            ctor.writeInstanceField(cc.getFieldDescriptor(), ctor.getThis(), ctor.getMethodParam(0));
-            ctor.returnVoid();
+            cc.constructor(mc -> {
+                mc.public_();
+                ParamVar ccParam = mc.parameter("creationalContext", CreationalContext.class);
+                mc.body(bc -> {
+                    bc.invokeSpecial(ConstructorDesc.of(Object.class), cc.this_());
+                    bc.set(cc.this_().field(ccField), ccParam);
+                    bc.return_();
+                });
+            });
 
-            MethodCreator create = clazz.getMethodCreator("create", Object.class, Object.class);
+            cc.method("create", mc -> {
+                mc.public_();
+                mc.returning(Object.class);
+                ParamVar delegate = mc.parameter("delegate", Object.class);
+                mc.body(b0 -> {
+                    InterceptionProxyInfo interceptionProxy = bean.getInterceptionProxy();
+                    b0.ifInstanceOf(delegate, classDescOf(interceptionProxy.getTargetClass()), (b1, ignored) -> {
+                        ConstructorDesc ctor = ConstructorDesc.of(ClassDesc.of(interceptionSubclassName(interceptionProxy)),
+                                CreationalContext.class, Object.class);
+                        Expr ccVar = b1.get(cc.this_().field(ccField));
+                        b1.return_(b1.new_(ctor, ccVar, delegate));
+                    });
 
-            ResultHandle ccHandle = create.readInstanceField(cc.getFieldDescriptor(), create.getThis());
-            ResultHandle delegateHandle = create.getMethodParam(0);
-
-            BytecodeCreator isInstance = create.ifFalse(
-                    create.instanceOf(delegateHandle, bean.getInterceptionProxy().getTargetClass().toString()))
-                    .falseBranch();
-            isInstance.returnValue(isInstance.newInstance(MethodDescriptor.ofConstructor(
-                    interceptionSubclassName(bean.getInterceptionProxy()), CreationalContext.class, Object.class),
-                    ccHandle, delegateHandle));
-
-            ResultHandle exceptionMessage = Gizmo.newStringBuilder(create)
-                    .append("InterceptionProxy for ")
-                    .append(create.load(bean.toString()))
-                    .append(" got unknown delegate: ")
-                    .append(delegateHandle)
-                    .callToString();
-            ResultHandle exception = create.newInstance(
-                    MethodDescriptor.ofConstructor(IllegalArgumentException.class, String.class), exceptionMessage);
-            create.throwException(exception);
-            create.returnNull();
-        }
+                    Expr err = b0.withNewStringBuilder()
+                            .append("InterceptionProxy for ")
+                            .append(bean.toString())
+                            .append(" got unknown delegate: ")
+                            .append(delegate)
+                            .objToString();
+                    b0.throw_(IllegalArgumentException.class, err);
+                });
+            });
+        });
     }
 
-    private void createInterceptionSubclass(ClassOutput classOutput, InterceptionProxyInfo interceptionProxy) {
+    private void createInterceptionSubclass(Gizmo gizmo, InterceptionProxyInfo interceptionProxy) {
         BeanInfo pseudoBean = interceptionProxy.getPseudoBean();
         ClassInfo pseudoBeanClass = pseudoBean.getImplClazz();
-        String pseudoBeanClassName = pseudoBeanClass.name().toString();
+        String pseudoBeanClassName = pseudoBeanClass.name().toString(); // TODO remove this
         boolean isInterface = pseudoBeanClass.isInterface();
 
-        String superClass = isInterface ? Object.class.getName() : pseudoBeanClassName;
-        String[] interfaces = isInterface
-                ? new String[] { pseudoBeanClassName, InterceptionProxySubclass.class.getName() }
-                : new String[] { InterceptionProxySubclass.class.getName() };
+        ClassDesc superClass = isInterface ? ConstantDescs.CD_Object : classDescOf(pseudoBeanClass);
+
+        gizmo.class_(interceptionSubclassName(interceptionProxy), cc -> {
+            cc.extends_(superClass);
+            if (isInterface) {
+                cc.implements_(classDescOf(pseudoBeanClass));
+            }
+            cc.implements_(InterceptionProxySubclass.class);
+
+            FieldDesc delegateField = cc.field("delegate", fc -> {
+                fc.private_();
+                fc.final_();
+                fc.withType(Object.class);
+            });
+
+            cc.field(SubclassGenerator.FIELD_NAME_CONSTRUCTED, fc -> {
+                fc.private_();
+                fc.final_();
+                fc.withType(boolean.class);
+            });
+
+            IR ir = createIR(cc, pseudoBean);
+
+            cc.constructor(mc -> {
+                mc.public_();
+                ParamVar ccParam = mc.parameter("creationalContext", CreationalContext.class);
+                ParamVar delegateParam = mc.parameter("delegate", Object.class);
+                mc.body(bc -> {
+                    bc.invokeSpecial(ConstructorDesc.of(superClass), cc.this_());
+                    bc.set(cc.this_().field(delegateField), delegateParam);
+
+                    LocalVar arc = bc.define("arc", bc.invokeStatic(MethodDescs.ARC_CONTAINER));
+
+                    Map<String, LocalVar> interceptorBeanToLocalVar = new HashMap<>();
+                    Map<String, LocalVar> interceptorInstanceToLocalVar = new HashMap<>();
+                    for (InterceptorInfo interceptorInfo : ir.boundInterceptors()) {
+                        String id = interceptorInfo.getIdentifier();
+
+                        LocalVar interceptorBean = bc.define("interceptorBean_" + id, bc.invokeInterface(
+                                MethodDescs.ARC_CONTAINER_BEAN, arc, Constant.of(id)));
+                        interceptorBeanToLocalVar.put(id, interceptorBean);
+
+                        Expr ccChild = bc.invokeStatic(MethodDescs.CREATIONAL_CTX_CHILD, ccParam);
+                        LocalVar interceptorInstance = bc.define("interceptorInstance_" + id, bc.invokeInterface(
+                                MethodDescs.INJECTABLE_REF_PROVIDER_GET, interceptorBean, ccChild));
+                        interceptorInstanceToLocalVar.put(id, interceptorInstance);
+                    }
+
+                    Map<MethodDesc, MethodDesc> forwardingMethods = new HashMap<>();
+                    for (MethodInfo method : ir.interceptedMethods().keySet()) {
+                        MethodDesc forwardDesc = SubclassGenerator.createForwardingMethod_2(cc, pseudoBeanClassName,
+                                method, (bytecode, virtualMethod, params) -> {
+                                    Expr delegate = bytecode.get(cc.this_().field(delegateField));
+                                    return isInterface
+                                            ? bytecode.invokeInterface(virtualMethod, delegate, params)
+                                            : bytecode.invokeVirtual(virtualMethod, delegate, params);
+                                });
+                        forwardingMethods.put(methodDescOf(method), forwardDesc);
+                    }
+
+                    SubclassGenerator.IntegerHolder chainIdx = new SubclassGenerator.IntegerHolder();
+                    SubclassGenerator.IntegerHolder bindingIdx = new SubclassGenerator.IntegerHolder();
+                    Map<List<InterceptorInfo>, String> interceptorChainKeys = new HashMap<>();
+                    Map<Set<AnnotationInstanceEquivalenceProxy>, String> bindingKeys = new HashMap<>();
+
+                    LocalVar interceptorChainMap = bc.define("interceptorChainMap", bc.new_(ConstructorDesc.of(HashMap.class)));
+                    LocalVar bindingsMap = bc.define("bindingsMap", bc.new_(ConstructorDesc.of(HashMap.class)));
+                });
+            });
+
+            cc.method("arc_delegate", mc -> {
+                mc.public_();
+                mc.returning(Object.class);
+                mc.body(bc -> {
+                    bc.return_(cc.this_().field(delegateField));
+                });
+            });
+        });
 
         try (ClassCreator clazz = ClassCreator.builder()
-                .classOutput(classOutput)
                 .className(interceptionSubclassName(interceptionProxy))
-                .superClass(superClass)
-                .interfaces(interfaces)
                 .build()) {
 
             FieldCreator delegate = clazz.getFieldCreator("delegate", Object.class)
@@ -213,6 +309,8 @@ public class InterceptionProxyGenerator extends AbstractGenerator {
 
             ResultHandle interceptorChainMap = ctor.newInstance(MethodDescriptor.ofConstructor(HashMap.class));
             ResultHandle bindingsMap = ctor.newInstance(MethodDescriptor.ofConstructor(HashMap.class));
+
+            // ============== the code below was not translated to Gizmo 2 yet ==============
 
             // Shared interceptor bindings literals
             Map<AnnotationInstanceEquivalenceProxy, ResultHandle> bindingsLiterals = new HashMap<>();
@@ -352,9 +450,44 @@ public class InterceptionProxyGenerator extends AbstractGenerator {
 
             ctor.writeInstanceField(constructedField.getFieldDescriptor(), ctor.getThis(), ctor.load(true));
             ctor.returnVoid();
-
-            MethodCreator getDelegate = clazz.getMethodCreator("arc_delegate", Object.class);
-            getDelegate.returnValue(getDelegate.readInstanceField(delegate.getFieldDescriptor(), getDelegate.getThis()));
         }
+    }
+
+    record InitMetadataMethodGroup(int id, List<MethodInfo> interceptedMethods) {
+    }
+
+    record IR(
+            List<InterceptorInfo> boundInterceptors,
+            Map<MethodInfo, BeanInfo.InterceptionInfo> interceptedMethods,
+            List<InitMetadataMethodGroup> initMetadataGroups) {
+    }
+
+    private IR createIR(io.quarkus.gizmo2.creator.ClassCreator cc, BeanInfo pseudoBean) {
+        List<InterceptorInfo> boundInterceptors = pseudoBean.getBoundInterceptors();
+
+        Map<MethodInfo, BeanInfo.InterceptionInfo> interceptedMethods = pseudoBean.getInterceptedMethods();
+
+        int groupLimit = 30;
+        List<InitMetadataMethodGroup> initMetadataGroups = new ArrayList<>();
+        List<MethodInfo> interceptedMethodsInGroup = new ArrayList<>();
+        int groupCounter = 0;
+        int methodCounter = 0;
+        for (MethodInfo method : interceptedMethods.keySet()) {
+            interceptedMethodsInGroup.add(method);
+            methodCounter++;
+
+            if (methodCounter == groupLimit) {
+                initMetadataGroups.add(new InitMetadataMethodGroup(groupCounter, List.copyOf(interceptedMethodsInGroup)));
+
+                groupCounter++;
+                methodCounter = 0;
+                interceptedMethodsInGroup.clear();
+            }
+        }
+        if (!interceptedMethodsInGroup.isEmpty()) {
+            initMetadataGroups.add(new InitMetadataMethodGroup(groupCounter, List.copyOf(interceptedMethodsInGroup)));
+        }
+
+        return new IR(boundInterceptors, interceptedMethods, List.copyOf(initMetadataGroups));
     }
 }
