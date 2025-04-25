@@ -84,9 +84,9 @@ import io.quarkus.gizmo2.desc.MethodDesc;
  */
 public class SubclassGenerator extends AbstractGenerator {
 
-    private static final DotName JAVA_LANG_THROWABLE = DotNames.create(Throwable.class.getName());
-    private static final DotName JAVA_LANG_EXCEPTION = DotNames.create(Exception.class.getName());
-    private static final DotName JAVA_LANG_RUNTIME_EXCEPTION = DotNames.create(RuntimeException.class.getName());
+    private static final DotName JAVA_LANG_THROWABLE = DotNames.create(Throwable.class);
+    private static final DotName JAVA_LANG_EXCEPTION = DotNames.create(Exception.class);
+    private static final DotName JAVA_LANG_RUNTIME_EXCEPTION = DotNames.create(RuntimeException.class);
 
     static final String SUBCLASS_SUFFIX = "_Subclass";
     static final String MARK_CONSTRUCTED_METHOD_NAME = "arc$markConstructed";
