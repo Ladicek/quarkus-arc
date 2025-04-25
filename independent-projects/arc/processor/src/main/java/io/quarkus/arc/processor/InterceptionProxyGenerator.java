@@ -368,7 +368,7 @@ public class InterceptionProxyGenerator extends AbstractGenerator {
                             // Finally create the intercepted method
                             MethodDesc forwardDescriptor = forwardingMethods.get(methodDesc);
                             SubclassGenerator.createInterceptedMethod_2(method, cc, metadataField, constructedField,
-                                    forwardDescriptor, ignored -> cc.this_().field(delegateField));
+                                    forwardDescriptor, () -> cc.this_().field(delegateField));
                         }
 
                         bc.return_();
