@@ -22,8 +22,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -52,8 +52,9 @@ import io.quarkus.arc.processor.BuildExtension.BuildContext;
 import io.quarkus.arc.processor.BuildExtension.Key;
 import io.quarkus.arc.processor.Types.TypeClosure;
 import io.quarkus.arc.processor.bcextensions.ExtensionsEntryPoint;
-import io.quarkus.gizmo.MethodCreator;
-import io.quarkus.gizmo.ResultHandle;
+import io.quarkus.gizmo2.Expr;
+import io.quarkus.gizmo2.ParamVar;
+import io.quarkus.gizmo2.creator.BlockCreator;
 
 public class BeanDeployment {
 
@@ -118,7 +119,7 @@ public class BeanDeployment {
     private final Set<BeanInfo> beansWithRuntimeDeferredUnproxyableError;
 
     // scope -> list of funs that accept the method creator for ComponentsProvider#getComponents()
-    private final Map<ScopeInfo, List<Function<MethodCreator, ResultHandle>>> customContexts;
+    private final Map<ScopeInfo, List<BiFunction<BlockCreator, ParamVar, Expr>>> customContexts;
 
     private final Map<DotName, BeanDefiningAnnotation> beanDefiningAnnotations;
 
@@ -773,7 +774,7 @@ public class BeanDeployment {
         return annotationStore.hasAnnotation(target, name);
     }
 
-    Map<ScopeInfo, List<Function<MethodCreator, ResultHandle>>> getCustomContexts() {
+    Map<ScopeInfo, List<BiFunction<BlockCreator, ParamVar, Expr>>> getCustomContexts() {
         return customContexts;
     }
 

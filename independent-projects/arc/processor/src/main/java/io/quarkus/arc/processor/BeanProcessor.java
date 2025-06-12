@@ -18,6 +18,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -41,8 +42,9 @@ import io.quarkus.arc.processor.ResourceOutput.Resource;
 import io.quarkus.arc.processor.ResourceOutput.Resource.SpecialType;
 import io.quarkus.arc.processor.bcextensions.ExtensionsEntryPoint;
 import io.quarkus.gizmo.BytecodeCreator;
-import io.quarkus.gizmo.MethodCreator;
-import io.quarkus.gizmo.ResultHandle;
+import io.quarkus.gizmo2.Expr;
+import io.quarkus.gizmo2.ParamVar;
+import io.quarkus.gizmo2.creator.BlockCreator;
 
 /**
  * An integrator should create a new instance of the bean processor using the convenient {@link Builder} and then invoke the
@@ -595,7 +597,7 @@ public class BeanProcessor {
         contextsForScope.put(BuiltinScope.REQUEST.getName(), 1);
         contextsForScope.put(BuiltinScope.SESSION.getName(), 1);
         // custom contexts
-        for (Map.Entry<ScopeInfo, List<Function<MethodCreator, ResultHandle>>> entry : beanDeployment
+        for (Map.Entry<ScopeInfo, List<BiFunction<BlockCreator, ParamVar, Expr>>> entry : beanDeployment
                 .getCustomContexts()
                 .entrySet()) {
             if (entry.getKey().isNormal()) {
