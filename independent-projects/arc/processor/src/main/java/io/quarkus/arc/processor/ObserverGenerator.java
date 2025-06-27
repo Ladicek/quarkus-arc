@@ -35,7 +35,7 @@ import io.quarkus.arc.InjectableObserverMethod;
 import io.quarkus.arc.impl.CreationalContextImpl;
 import io.quarkus.arc.impl.Mockable;
 import io.quarkus.arc.processor.BeanProcessor.PrivateMembersCollector;
-import io.quarkus.arc.processor.BuiltinBean.GeneratorContext_2;
+import io.quarkus.arc.processor.BuiltinBean.GeneratorContext;
 import io.quarkus.arc.processor.ResourceOutput.Resource;
 import io.quarkus.arc.processor.ResourceOutput.Resource.SpecialType;
 import io.quarkus.gizmo2.Const;
@@ -299,7 +299,7 @@ public class ObserverGenerator extends AbstractGenerator {
                 bc.invokeSpecial(MethodDescs.OBJECT_CONSTRUCTOR, cc.this_());
 
                 if (observer.isSynthetic()) {
-                    SyntheticComponentsUtil.addParamsFieldAndInit_2(cc, bc, observer.getParams(), annotationLiterals,
+                    SyntheticComponentsUtil.addParamsFieldAndInit(cc, bc, observer.getParams(), annotationLiterals,
                             observer.getBeanDeployment().getBeanArchiveIndex());
                 } else {
                     bc.set(cc.this_().field(declaringProviderField), declaringProviderSupplier);
@@ -311,7 +311,7 @@ public class ObserverGenerator extends AbstractGenerator {
                             BuiltinBean builtinBean = BuiltinBean.resolve(injectionPoint);
                             assert builtinBean != null;
                             FieldDesc providerField = injectionPointToProviderField.get(injectionPoint);
-                            builtinBean.getGenerator_2().generate(new GeneratorContext_2(
+                            builtinBean.getGenerator().generate(new GeneratorContext(
                                     observer.getDeclaringBean().getDeployment(), injectionPoint,
                                     // TODO pass the `FieldDesc` instead of the name
                                     providerField != null ? providerField.name() : null, annotationLiterals, observer,
@@ -323,7 +323,7 @@ public class ObserverGenerator extends AbstractGenerator {
                                 // Wrap the constructor arg in a Supplier so we can pass it to CurrentInjectionPointProvider ctor.
                                 Expr delegateSupplier = bc.new_(MethodDescs.FIXED_VALUE_SUPPLIER_CONSTRUCTOR,
                                         injectionPointParam);
-                                Expr wrap = BeanGenerator.wrapCurrentInjectionPoint_2(observer.getDeclaringBean(),
+                                Expr wrap = BeanGenerator.wrapCurrentInjectionPoint(observer.getDeclaringBean(),
                                         bc, injectionPoint, Const.ofNull(Object.class), delegateSupplier, null,
                                         annotationLiterals, reflectionRegistration, injectionPointAnnotationsPredicate);
                                 supplier = bc.new_(MethodDescs.FIXED_VALUE_SUPPLIER_CONSTRUCTOR, wrap);
@@ -344,7 +344,7 @@ public class ObserverGenerator extends AbstractGenerator {
                     for (AnnotationInstance qualifier : qualifiers) {
                         BuiltinQualifier builtin = BuiltinQualifier.of(qualifier);
                         if (builtin != null) {
-                            bc.set(qualifiersArray.elem(i), builtin.getLiteralInstance_2());
+                            bc.set(qualifiersArray.elem(i), builtin.getLiteralInstance());
                         } else {
                             ClassInfo qualifierClass = observer.getBeanDeployment().getQualifier(qualifier.name());
                             bc.set(qualifiersArray.elem(i), annotationLiterals.create(bc, qualifierClass, qualifier));
@@ -610,7 +610,7 @@ public class ObserverGenerator extends AbstractGenerator {
                                         classDescOf(PrimitiveType.box(injectionPoint.getType().asPrimitiveType())))
                                 : b0.cast(dependency, classDescOf(injectionPoint.getType()));
                         LocalVar arg = b0.localVar("arg" + i, dependencyCast);
-                        BeanGenerator.checkPrimitiveInjection_2(b0, injectionPoint, arg);
+                        BeanGenerator.checkPrimitiveInjection(b0, injectionPoint, arg);
                         LocalVar arg2 = isPrimitive ? b0.localVar("arg" + i + "Primitive", b0.unbox(arg)) : arg;
                         args[i] = arg2;
                     }
