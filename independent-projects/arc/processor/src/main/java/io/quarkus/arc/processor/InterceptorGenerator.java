@@ -221,8 +221,6 @@ public class InterceptorGenerator extends BeanGenerator {
                 ParamVar interceptor = lc.parameter("interceptor", 0);
                 ParamVar invocationContext = lc.parameter("invocationContext", 1);
                 lc.body(lbc -> {
-                    // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-                    lbc.set(interceptor, lbc.cast(interceptor, interceptorClass));
                     Expr result = invokeInterceptorMethod(lbc, interceptorClass, method, interceptionType,
                             isApplicationClass, invocationContext, interceptor);
                     lbc.return_(interceptionType == InterceptionType.AROUND_INVOKE ? result : Const.ofNull(Object.class));
@@ -308,8 +306,6 @@ public class InterceptorGenerator extends BeanGenerator {
                     });
                 } else {
                     ClassDesc interceptorClass = classDescOf(interceptor.getProviderType());
-                    // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-                    b0.set(interceptorInstance, b0.cast(interceptorInstance, interceptorClass));
                     generateIntercept(cc, b0, interceptor.getAroundInvokes(), InterceptionType.AROUND_INVOKE,
                             interceptorClass, isApplicationClass, interceptionType, interceptorInstance, invocationContext);
                     generateIntercept(cc, b0, interceptor.getPostConstructs(), InterceptionType.POST_CONSTRUCT,

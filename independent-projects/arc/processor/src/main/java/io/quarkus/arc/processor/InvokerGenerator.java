@@ -164,8 +164,6 @@ public class InvokerGenerator extends AbstractGenerator {
                 ParamVar arguments = mc.parameter("arguments", Object[].class);
                 mc.body(bc -> {
                     MethodInfo wrappingMethod = findWrapper(invoker);
-                    // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-                    bc.set(instance, bc.cast(instance, classDescOf(wrappingMethod.parameterType(0))));
                     Expr result = bc.invokeStatic(methodDescOf(wrappingMethod), instance, arguments,
                             cc.this_().field(delegate));
                     if (wrappingMethod.returnType().kind() == Type.Kind.VOID) {
@@ -330,8 +328,6 @@ public class InvokerGenerator extends AbstractGenerator {
                         instance = info.instanceLookup != null
                                 ? b0.localVar("instance", generateLookup(cc, b0, instanceSupplier, rootCC))
                                 : instanceParam;
-                        // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-                        b0.set(instance, b0.cast(instance, classDescOf(invoker.method.declaringClass())));
                         if (info.instanceTransformer != null) {
                             instance = b0.localVar("transformedInstance",
                                     generateTransformerCall(b0, info.instanceTransformer, instance, cleanupTasks));
@@ -364,9 +360,6 @@ public class InvokerGenerator extends AbstractGenerator {
                                         + invoker.method.parameterType(finalI) + " expected");
                             });
                             arguments[i] = primitiveArg;
-                        } else {
-                            // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-                            b0.set(arguments[i], b0.cast(arguments[i], classDescOf(parameterType)));
                         }
                     }
 
@@ -448,28 +441,17 @@ public class InvokerGenerator extends AbstractGenerator {
         assert transformerMethod != null;
         MethodDesc methodDesc = methodDescOf(transformerMethod.method);
 
-        // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-        Expr castValue;
-        Type expectedValueType = Modifier.isStatic(transformerMethod.method.flags())
-                ? transformerMethod.method.parameterType(0)
-                : ClassType.create(transformerMethod.method.declaringClass().name());
-        if (expectedValueType.kind() == Type.Kind.PRIMITIVE) {
-            castValue = bc.unbox(bc.cast(value, classDescOf(PrimitiveType.box(expectedValueType.asPrimitiveType()))));
-        } else {
-            castValue = bc.cast(value, classDescOf(expectedValueType));
-        }
-
         if (Modifier.isStatic(transformerMethod.method.flags())) {
             if (transformerMethod.usesCleanupTasks()) {
-                return bc.invokeStatic(methodDesc, castValue, cleanupTasks);
+                return bc.invokeStatic(methodDesc, value, cleanupTasks);
             } else {
-                return bc.invokeStatic(methodDesc, castValue);
+                return bc.invokeStatic(methodDesc, value);
             }
         } else {
             if (transformerMethod.method.declaringClass().isInterface()) {
-                return bc.invokeInterface(methodDesc, castValue);
+                return bc.invokeInterface(methodDesc, value);
             } else {
-                return bc.invokeVirtual(methodDesc, castValue);
+                return bc.invokeVirtual(methodDesc, value);
             }
         }
     }

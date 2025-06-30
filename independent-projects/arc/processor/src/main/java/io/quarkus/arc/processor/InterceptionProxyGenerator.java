@@ -24,11 +24,9 @@ import jakarta.interceptor.InvocationContext;
 
 import org.jboss.jandex.AnnotationInstanceEquivalenceProxy;
 import org.jboss.jandex.ClassInfo;
-import org.jboss.jandex.ClassType;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
 import org.jboss.jandex.MethodInfo;
-import org.jboss.jandex.PrimitiveType;
 import org.jboss.jandex.Type;
 
 import io.quarkus.arc.InjectableReferenceProvider;
@@ -370,8 +368,6 @@ public class InterceptionProxyGenerator extends AbstractGenerator {
                         ParamVar target = lc.parameter("target", 0);
                         ParamVar ctx = lc.parameter("ctx", 1);
                         lc.body(lbc -> {
-                            // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-                            Expr castTarget = lbc.cast(target, classDescOf(method.declaringClass()));
                             Expr[] superArgs;
                             if (parameters.isEmpty()) {
                                 superArgs = new Expr[0];
@@ -380,18 +376,12 @@ public class InterceptionProxyGenerator extends AbstractGenerator {
                                         MethodDesc.of(InvocationContext.class, "getParameters", Object[].class), ctx));
                                 superArgs = new Expr[parameters.size()];
                                 for (int i = 0; i < parameters.size(); i++) {
-                                    if (method.parameterType(i).kind() == Type.Kind.PRIMITIVE) {
-                                        // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-                                        ClassType box = PrimitiveType.box(method.parameterType(i).asPrimitiveType());
-                                        superArgs[i] = lbc.cast(ctxArgs.elem(i), classDescOf(box));
-                                    } else {
-                                        superArgs[i] = ctxArgs.elem(i);
-                                    }
+                                    superArgs[i] = ctxArgs.elem(i);
                                 }
                             }
                             Expr superResult = isInterface
-                                    ? lbc.invokeInterface(methodDesc, castTarget, superArgs)
-                                    : lbc.invokeVirtual(methodDesc, castTarget, superArgs);
+                                    ? lbc.invokeInterface(methodDesc, target, superArgs)
+                                    : lbc.invokeVirtual(methodDesc, target, superArgs);
                             lbc.return_(superResult);
                         });
                     });

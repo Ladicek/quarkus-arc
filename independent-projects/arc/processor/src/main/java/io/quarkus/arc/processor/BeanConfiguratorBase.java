@@ -31,7 +31,6 @@ import io.quarkus.arc.InjectableReferenceProvider;
 import io.quarkus.arc.InterceptionProxy;
 import io.quarkus.arc.SyntheticCreationalContext;
 import io.quarkus.arc.processor.InjectionPointInfo.TypeAndQualifiers;
-import io.quarkus.gizmo2.Expr;
 import io.quarkus.gizmo2.Var;
 import io.quarkus.gizmo2.creator.BlockCreator;
 import io.quarkus.gizmo2.creator.ClassCreator;
@@ -483,9 +482,7 @@ public abstract class BeanConfiguratorBase<THIS extends BeanConfiguratorBase<THI
             BlockCreator bc = cag.checkActiveMethod();
 
             // return new FooActiveResultSupplier().get()
-            Expr result = bc.invokeInterface(MethodDescs.SUPPLIER_GET, bc.new_(checkActiveClazz));
-            // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-            bc.return_(bc.cast(result, ActiveResult.class));
+            bc.return_(bc.invokeInterface(MethodDescs.SUPPLIER_GET, bc.new_(checkActiveClazz)));
         });
     }
 
