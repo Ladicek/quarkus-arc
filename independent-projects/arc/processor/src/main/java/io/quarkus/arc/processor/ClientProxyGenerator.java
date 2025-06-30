@@ -214,8 +214,7 @@ public class ClientProxyGenerator extends AbstractGenerator {
                     } else {
                         ret = b0.invokeStatic(MethodDescs.CLIENT_PROXIES_GET_DELEGATE, cc.this_().field(beanField));
                     }
-                    // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-                    b0.return_(b0.cast(ret, providerClassDesc));
+                    b0.return_(ret);
                 });
             });
 
@@ -246,8 +245,7 @@ public class ClientProxyGenerator extends AbstractGenerator {
                 cc.method(SET_MOCK_METHOD_NAME, mc -> {
                     ParamVar mock = mc.parameter("mock", Object.class);
                     mc.body(bc -> {
-                        // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-                        bc.set(cc.this_().field(mockField), bc.cast(mock, mockField.type()));
+                        bc.set(cc.this_().field(mockField), mock);
                         bc.return_();
                     });
                 });

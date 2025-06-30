@@ -780,8 +780,6 @@ public class BeanGenerator extends AbstractGenerator {
             // Destroy injected transient references
             destroyTransientReferences(bc, transientReferences);
         }
-        // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-        bc.set(instance, bc.cast(instance, providerType.classDesc()));
 
         // Perform field and initializer injections
         for (Injection injection : bean.getInjections()) {
@@ -813,10 +811,8 @@ public class BeanGenerator extends AbstractGenerator {
                             // We cannot use `injectionPoint.getRequiredType()` because it might be a resolved
                             // parameterize type and we could get `NoSuchFieldError`
                             Type ipType = injectionPoint.getAnnotationTarget().asField().type();
-                            // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-                            Expr value = castAndMaybeUnbox(b1, injectedReference, ipType);
                             b1.set(instance.field(FieldDesc.of(classDescOf(injectedField.declaringClass()),
-                                    injectedField.name(), classDescOf(ipType))), value);
+                                    injectedField.name(), classDescOf(ipType))), injectedReference);
                         }
                     });
                     tc.catch_(RuntimeException.class, "e", (b1, e) -> {
@@ -862,12 +858,7 @@ public class BeanGenerator extends AbstractGenerator {
                             Const.of(initializerMethod.name()), paramTypes, instance, args);
 
                 } else {
-                    // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-                    Expr[] values = new Expr[injectedReferences.length];
-                    for (int i = 0; i < values.length; i++) {
-                        values[i] = castAndMaybeUnbox(bc, injectedReferences[i], initializerMethod.parameterType(i));
-                    }
-                    bc.invokeVirtual(methodDescOf(initializerMethod), instance, values);
+                    bc.invokeVirtual(methodDescOf(initializerMethod), instance, injectedReferences);
                 }
 
                 // Destroy injected transient references
@@ -985,8 +976,7 @@ public class BeanGenerator extends AbstractGenerator {
             });
         }
 
-        // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-        bc.return_(bc.cast(instance, providerType.classDesc()));
+        bc.return_(instance);
     }
 
     private Expr newBeanInstance(BeanInfo bean, BlockCreator bc, ProviderType providerType, String baseName,
@@ -1007,10 +997,8 @@ public class BeanGenerator extends AbstractGenerator {
 
             // 1. constructor injection points
             for (int i = 0; i < injectionPoints.size(); i++) {
-                Type ipType = injectionPoints.get(i).getType();
-                paramTypes.add(classDescOf(ipType));
-                // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-                args.add(castAndMaybeUnbox(bc, providers.get(i), ipType));
+                paramTypes.add(classDescOf(injectionPoints.get(i).getType()));
+                args.add(providers.get(i));
             }
             // 2. ctx
             paramTypes.add(Reflection2Gizmo.classDescOf(CreationalContext.class));
@@ -1061,16 +1049,15 @@ public class BeanGenerator extends AbstractGenerator {
                 for (InjectionPointInfo injectionPoint : injectionPoints) {
                     paramTypes.add(classDescOf(injectionPoint.getType()));
                 }
-                // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-                Expr[] values = new Expr[params];
+                Expr[] args = new Expr[params];
                 for (int i = 0; i < injectionPoints.size(); i++) {
-                    values[i] = castAndMaybeUnbox(bc, providers.get(i), injectionPoints.get(i).getType());
+                    args[i] = providers.get(i);
                 }
                 if (DecoratorGenerator.isAbstractDecoratorImpl(bean, providerType.className())) {
                     paramTypes.add(Reflection2Gizmo.classDescOf(CreationalContext.class));
-                    values[params - 1] = parentCC;
+                    args[params - 1] = parentCC;
                 }
-                return bc.new_(ConstructorDesc.of(providerType.classDesc(), paramTypes), values);
+                return bc.new_(ConstructorDesc.of(providerType.classDesc(), paramTypes), args);
             }
         } else {
             MethodInfo noArgsConstructor = bean.getTarget().get().asClass().method(Methods.INIT);
@@ -1177,8 +1164,6 @@ public class BeanGenerator extends AbstractGenerator {
                 b0.set(declaringProviderInstance,
                         b0.invokeInterface(MethodDescs.CLIENT_PROXY_GET_CONTEXTUAL_INSTANCE, declaringProviderInstance));
             }
-            // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-            b0.set(declaringProviderInstance, b0.cast(declaringProviderInstance, classDescOf(producerMethod.declaringClass())));
         }
 
         List<InjectionPointInfo> injectionPoints = bean.getAllInjectionPoints();
@@ -1216,17 +1201,11 @@ public class BeanGenerator extends AbstractGenerator {
                         Const.of(classDescOf(producerMethod.declaringClass())), Const.of(producerMethod.name()),
                         paramTypes, declaringProviderInstance, args);
             } else {
-                // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-                Expr[] values = new Expr[injectedReferences.length];
-                for (int i = 0; i < values.length; i++) {
-                    values[i] = castAndMaybeUnbox(b1, injectedReferences[i], producerMethod.parameterType(i));
-                }
                 result = isStatic
-                        ? b1.invokeStatic(methodDescOf(producerMethod), values)
-                        : b1.invokeVirtual(methodDescOf(producerMethod), declaringProviderInstance, values);
+                        ? b1.invokeStatic(methodDescOf(producerMethod), injectedReferences)
+                        : b1.invokeVirtual(methodDescOf(producerMethod), declaringProviderInstance, injectedReferences);
             }
-            // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-            b1.yield(b1.cast(result, classDescOf(bean.getProviderType())));
+            b1.yield(result);
         }));
 
         if (bean.getScope().isNormal()) {
@@ -1273,8 +1252,6 @@ public class BeanGenerator extends AbstractGenerator {
                 b0.set(declaringProviderInstance,
                         b0.invokeInterface(MethodDescs.CLIENT_PROXY_GET_CONTEXTUAL_INSTANCE, declaringProviderInstance));
             }
-            // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-            b0.set(declaringProviderInstance, b0.cast(declaringProviderInstance, classDescOf(producerField.declaringClass())));
         }
 
         LocalVar instance = b0.localVar("instance", b0.blockExpr(classDescOf(bean.getProviderType()), b1 -> {
@@ -1291,8 +1268,7 @@ public class BeanGenerator extends AbstractGenerator {
                         ? Expr.staticField(fieldDescOf(producerField))
                         : declaringProviderInstance.field(fieldDescOf(producerField));
             }
-            // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-            b1.yield(b1.cast(result, classDescOf(bean.getProviderType())));
+            b1.yield(result);
         }));
 
         if (bean.getScope().isNormal()) {
@@ -1467,9 +1443,7 @@ public class BeanGenerator extends AbstractGenerator {
         LocalVar result = b0.localVar("result", Const.ofNull(classDescOf(bean.getProviderType())));
         b0.try_(tc -> {
             tc.body(b1 -> {
-                // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-                b1.set(result, b1.cast(b1.invokeVirtual(createSyntheticDesc, cc.this_(), synthCC),
-                        classDescOf(bean.getProviderType())));
+                b1.set(result, b1.invokeVirtual(createSyntheticDesc, cc.this_(), synthCC));
             });
             tc.catch_(Exception.class, "e", (b1, e) -> {
                 Expr msg = b1.withNewStringBuilder()
@@ -1494,15 +1468,6 @@ public class BeanGenerator extends AbstractGenerator {
         }
 
         b0.return_(result);
-    }
-
-    static Expr castAndMaybeUnbox(BlockCreator bc, Var object, Type type) {
-        assert !object.type().isPrimitive();
-        if (type.kind() == Type.Kind.PRIMITIVE) {
-            return bc.unbox(bc.cast(object, classDescOf(PrimitiveType.box(type.asPrimitiveType()))));
-        } else {
-            return bc.cast(object, classDescOf(type));
-        }
     }
 
     static void checkPrimitiveInjection(BlockCreator b0, InjectionPointInfo injectionPoint, LocalVar localVar) {
@@ -1538,10 +1503,8 @@ public class BeanGenerator extends AbstractGenerator {
                             if (!bean.isInterceptor()) {
                                 // in case someone calls `Bean.destroy()` directly (i.e., they use the low-level CDI API),
                                 // they may pass us a client proxy
-                                // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-                                LocalVar instance = b1.localVar("instance", b1.cast(
-                                        b1.invokeStatic(MethodDescs.CLIENT_PROXY_UNWRAP, providerParam),
-                                        classDescOf(bean.getProviderType())));
+                                LocalVar instance = b1.localVar("instance",
+                                        b1.invokeStatic(MethodDescs.CLIENT_PROXY_UNWRAP, providerParam));
 
                                 class PreDestroyGenerator {
                                     void generate(BlockCreator bc, Var instance) {
@@ -1567,9 +1530,6 @@ public class BeanGenerator extends AbstractGenerator {
                                             } else {
                                                 // instance.superCoolDestroyCallback()
                                                 bc.invokeVirtual(methodDescOf(callback), instance);
-                                                // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-                                                //bc.invokeVirtual(methodDescOf(callback),
-                                                //        bc.cast(instance, classDescOf(callback.declaringClass())));
                                             }
                                         }
                                     }
@@ -1588,9 +1548,6 @@ public class BeanGenerator extends AbstractGenerator {
                                     // TODO generated name includes `/` instead of `.`
                                     ClassDesc subclass = ClassDesc.of(SubclassGenerator.generatedName(
                                             bean.getProviderType().name(), baseName).replace('/', '.'));
-
-                                    // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-                                    Expr castInstance = b1.cast(instance, subclass);
 
                                     // if there _is_ some `@PreDestroy` interceptor, however, we'll reify the chain of `@PreDestroy`
                                     // callbacks into a `Runnable` that we pass into the interceptor chain to be called
@@ -1611,7 +1568,7 @@ public class BeanGenerator extends AbstractGenerator {
                                     });
 
                                     b1.invokeVirtual(ClassMethodDesc.of(subclass, SubclassGenerator.DESTROY_METHOD_NAME,
-                                            void.class, Runnable.class), castInstance, runnable);
+                                            void.class, Runnable.class), instance, runnable);
                                 }
                             }
 
@@ -1644,9 +1601,6 @@ public class BeanGenerator extends AbstractGenerator {
                                             MethodDescs.CLIENT_PROXY_GET_CONTEXTUAL_INSTANCE,
                                             declaringProviderInstance));
                                 }
-                                // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-                                b1.set(declaringProviderInstance, b1.cast(declaringProviderInstance,
-                                        classDescOf(disposerMethod.declaringClass())));
                             }
 
                             Var[] disposerArgs = new Var[disposerMethod.parametersCount()];
@@ -1686,15 +1640,10 @@ public class BeanGenerator extends AbstractGenerator {
                                         Const.of(disposerMethod.name()), paramTypesArray,
                                         declaringProviderInstance, argsArray);
                             } else {
-                                // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-                                Expr[] values = new Expr[disposerArgs.length];
-                                for (int i = 0; i < values.length; i++) {
-                                    values[i] = castAndMaybeUnbox(b1, disposerArgs[i], disposerMethod.parameterType(i));
-                                }
                                 if (isStatic) {
-                                    b1.invokeStatic(methodDescOf(disposerMethod), values);
+                                    b1.invokeStatic(methodDescOf(disposerMethod), disposerArgs);
                                 } else {
-                                    b1.invokeVirtual(methodDescOf(disposerMethod), declaringProviderInstance, values);
+                                    b1.invokeVirtual(methodDescOf(disposerMethod), declaringProviderInstance, disposerArgs);
                                 }
                             }
 
@@ -1759,9 +1708,7 @@ public class BeanGenerator extends AbstractGenerator {
             ParamVar provider = mc.parameter("provider", Object.class);
             ParamVar creationalContext = mc.parameter("creationalContext", CreationalContext.class);
             mc.body(bc -> {
-                // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-                Expr castProvider = bc.cast(provider, classDescOf(bean.getProviderType()));
-                bc.return_(bc.invokeVirtual(destroyDesc, cc.this_(), castProvider, creationalContext));
+                bc.return_(bc.invokeVirtual(destroyDesc, cc.this_(), provider, creationalContext));
             });
         });
     }
@@ -1807,8 +1754,7 @@ public class BeanGenerator extends AbstractGenerator {
                     // CreationalContextImpl.addDependencyToParent(this,instance,ctx)
                     b0.invokeStatic(MethodDescs.CREATIONAL_CTX_ADD_DEP_TO_PARENT, cc.this_(), instance, creationalContextParam);
                     // return instance
-                    // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-                    b0.return_(b0.cast(instance, providerType));
+                    b0.return_(instance);
                 } else if (bean.getScope().isNormal()) {
                     // All normal scopes
                     // return proxy()
@@ -1822,8 +1768,7 @@ public class BeanGenerator extends AbstractGenerator {
                     Expr creationalContext = b0.new_(ConstructorDesc.of(CreationalContextImpl.class, Contextual.class),
                             cc.this_());
                     Expr instance = b0.invokeInterface(MethodDescs.CONTEXT_GET, context, cc.this_(), creationalContext);
-                    // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-                    b0.return_(b0.cast(instance, providerType));
+                    b0.return_(instance);
                 }
             });
         });

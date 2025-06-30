@@ -29,7 +29,6 @@ import jakarta.enterprise.inject.spi.ObserverMethod;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
-import org.jboss.jandex.PrimitiveType;
 
 import io.quarkus.arc.InjectableObserverMethod;
 import io.quarkus.arc.impl.CreationalContextImpl;
@@ -584,16 +583,7 @@ public class ObserverGenerator extends AbstractGenerator {
                 for (int i = 0; i < observer.getObserverMethod().parametersCount(); i++) {
                     if (i == observer.getEventParameter().position()) {
                         Expr eventObject = b0.invokeInterface(MethodDescs.EVENT_CONTEXT_GET_EVENT, eventContext);
-                        Expr eventObjectCast;
-                        if (observer.getObservedType().kind() == org.jboss.jandex.Type.Kind.PRIMITIVE) {
-                            // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-                            eventObjectCast = b0.unbox(b0.cast(eventObject,
-                                    classDescOf(PrimitiveType.box(observer.getObservedType().asPrimitiveType()))));
-                        } else {
-                            // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-                            eventObjectCast = b0.cast(eventObject, classDescOf(observer.getObservedType()));
-                        }
-                        args[i] = b0.localVar("arg" + i, eventObjectCast);
+                        args[i] = b0.localVar("arg" + i, eventObject);
                     } else if (i == observer.getEventMetadataParameterPosition()) {
                         args[i] = b0.localVar("arg" + i,
                                 b0.invokeInterface(MethodDescs.EVENT_CONTEXT_GET_METADATA, eventContext));
@@ -603,16 +593,9 @@ public class ObserverGenerator extends AbstractGenerator {
                                 cc.this_().field(injectionPointToProviderField.get(injectionPoint)));
                         Expr childCtx = b0.invokeStatic(MethodDescs.CREATIONAL_CTX_CHILD, ctx);
                         Expr dependency = b0.invokeInterface(MethodDescs.INJECTABLE_REF_PROVIDER_GET, provider, childCtx);
-                        boolean isPrimitive = injectionPoint.getType().kind() == org.jboss.jandex.Type.Kind.PRIMITIVE;
-                        // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-                        Expr dependencyCast = isPrimitive
-                                ? b0.cast(dependency,
-                                        classDescOf(PrimitiveType.box(injectionPoint.getType().asPrimitiveType())))
-                                : b0.cast(dependency, classDescOf(injectionPoint.getType()));
-                        LocalVar arg = b0.localVar("arg" + i, dependencyCast);
+                        LocalVar arg = b0.localVar("arg" + i, dependency);
                         BeanGenerator.checkPrimitiveInjection(b0, injectionPoint, arg);
-                        LocalVar arg2 = isPrimitive ? b0.localVar("arg" + i + "Primitive", b0.unbox(arg)) : arg;
-                        args[i] = arg2;
+                        args[i] = arg;
                     }
                 }
 
@@ -635,10 +618,7 @@ public class ObserverGenerator extends AbstractGenerator {
                     if (isStatic) {
                         b0.invokeStatic(methodDescOf(observer.getObserverMethod()), args);
                     } else {
-                        b0.invokeVirtual(methodDescOf(observer.getObserverMethod()),
-                                // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-                                b0.cast(declaringProviderInstance, classDescOf(observer.getObserverMethod().declaringClass())),
-                                args);
+                        b0.invokeVirtual(methodDescOf(observer.getObserverMethod()), declaringProviderInstance, args);
                     }
                 }
 

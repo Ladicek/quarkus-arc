@@ -29,11 +29,9 @@ import jakarta.interceptor.InvocationContext;
 
 import org.jboss.jandex.AnnotationInstanceEquivalenceProxy;
 import org.jboss.jandex.ClassInfo;
-import org.jboss.jandex.ClassType;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
 import org.jboss.jandex.MethodInfo;
-import org.jboss.jandex.PrimitiveType;
 import org.jboss.jandex.Type;
 import org.jboss.jandex.Type.Kind;
 import org.jboss.jandex.TypeVariable;
@@ -440,8 +438,7 @@ public class SubclassGenerator extends AbstractGenerator {
                                 Expr instance;
                                 if (decoratorMethod == null) {
                                     desc = forwardDesc;
-                                    // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-                                    instance = lbc.cast(target, cc.type());
+                                    instance = target;
                                 } else {
                                     // If a decorator is bound then invoke the method upon the decorator instance instead of the generated forwarding method
                                     ClassDesc declaringClass = classDescOf(decoratorMethod.decorator.getBeanClass());
@@ -460,8 +457,7 @@ public class SubclassGenerator extends AbstractGenerator {
                                     MethodDesc decoratorMethodDesc = methodDescOf(decoratorMethod.method);
                                     // always a class, decorators cannot be interfaces
                                     desc = ClassMethodDesc.of(declaringClass, methodDesc.name(), decoratorMethodDesc.type());
-                                    // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-                                    instance = lbc.cast(capturedDecorator, declaringClass);
+                                    instance = capturedDecorator;
                                 }
 
                                 Expr[] superArgs;
@@ -472,13 +468,7 @@ public class SubclassGenerator extends AbstractGenerator {
                                             MethodDescs.INVOCATION_CONTEXT_GET_PARAMETERS, ctx));
                                     superArgs = new Expr[parameters.size()];
                                     for (int i = 0; i < parameters.size(); i++) {
-                                        ClassDesc paramType = classDescOf(method.parameterType(i));
-                                        if (paramType.isPrimitive()) {
-                                            ClassType boxed = PrimitiveType.box(method.parameterType(i).asPrimitiveType());
-                                            paramType = classDescOf(boxed);
-                                        }
-                                        // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-                                        superArgs[i] = lbc.cast(ctxArgs.elem(i), paramType);
+                                        superArgs[i] = ctxArgs.elem(i);
                                     }
                                 }
 
@@ -555,8 +545,8 @@ public class SubclassGenerator extends AbstractGenerator {
                                 MethodDesc virtualMethodDesc = ClassMethodDesc.of(declaringClass, methodDesc.name(),
                                         decoratorMethodDesc.type());
                                 // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-                                db0.return_(db0.cast(db0.invokeVirtual(virtualMethodDesc,
-                                        db0.cast(decoratorInstance, declaringClass), params), methodDesc.returnType()));
+                                db0.return_(db0.cast(db0.invokeVirtual(virtualMethodDesc, decoratorInstance, params),
+                                        methodDesc.returnType()));
                             });
                         });
                     }
@@ -811,12 +801,7 @@ public class SubclassGenerator extends AbstractGenerator {
                                                         .stream()
                                                         .map(Jandex2Gizmo::classDescOf)
                                                         .toArray(ClassDesc[]::new)));
-                                // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-                                List<Expr> args = new ArrayList<>();
-                                for (int i = 0; i < params.size(); i++) {
-                                    args.add(bc.cast(params.get(i), virtualMethod.parameterType(i)));
-                                }
-                                bc.return_(bc.invokeVirtual(virtualMethod, delegateTo, args));
+                                bc.return_(bc.invokeVirtual(virtualMethod, delegateTo, params));
                             }
                         } else {
                             // This method is not decorated or no next decorator was found in the chain
@@ -871,8 +856,7 @@ public class SubclassGenerator extends AbstractGenerator {
             if (decoratorVar == null) {
                 throw new IllegalStateException("Decorator var must not be null");
             }
-            // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-            params[paramIdx] = subclassCtor.cast(decoratorVar, classDescOf(decoratorParameter.getImplClazz()));
+            params[paramIdx] = decoratorVar;
             paramIdx++;
         }
         Expr delegateSubclassInstance = subclassCtor.new_(ConstructorDesc.of(
@@ -933,9 +917,7 @@ public class SubclassGenerator extends AbstractGenerator {
                 MethodDesc virtualMethod = isInterface
                         ? InterfaceMethodDesc.of(providerType, methodDesc.name(), methodDesc.type())
                         : ClassMethodDesc.of(providerType, methodDesc.name(), methodDesc.type());
-                Expr result = forwardInvokeGenerator.generate(bc, virtualMethod, params);
-                // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-                bc.return_(bc.cast(result, classDescOf(method.returnType())));
+                bc.return_(forwardInvokeGenerator.generate(bc, virtualMethod, params));
             });
         });
         return forwardDescriptor;
@@ -980,16 +962,10 @@ public class SubclassGenerator extends AbstractGenerator {
                         Expr result = b1.invokeStatic(MethodDescs.INVOCATION_CONTEXTS_PERFORM_AROUND_INVOKE,
                                 getTarget.get(), args, methodMetadata);
                         if (method.returnType().kind() == Kind.VOID) {
-                            // TODO need to do this explicitly with Gizmo 2
-                            result = Const.ofVoid();
-                        } else if (method.returnType().kind() == Kind.PRIMITIVE) {
-                            // TODO need to cast explicitly due to Gizmo 2 not casting automatically
-                            ClassType boxed = PrimitiveType.box(method.returnType().asPrimitiveType());
-                            result = b1.unbox(b1.cast(result, classDescOf(boxed)));
+                            b1.return_();
                         } else {
-                            result = b1.cast(result, classDescOf(method.returnType()));
+                            b1.return_(result);
                         }
-                        b1.return_(result);
                     });
 
                     // catch exceptions declared on the original method
