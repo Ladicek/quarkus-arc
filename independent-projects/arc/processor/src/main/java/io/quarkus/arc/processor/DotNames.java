@@ -55,7 +55,6 @@ import jakarta.interceptor.Interceptor;
 import jakarta.interceptor.InterceptorBinding;
 import jakarta.interceptor.InvocationContext;
 
-import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 
 import io.quarkus.arc.All;
@@ -199,66 +198,10 @@ public final class DotNames {
     }
 
     /**
-     * @param clazz
-     * @return the simple name for the given top-level or nested class
+     * {@return {@link DotName#packagePrefix()} or an empty string if the method returns {@code null}}
      */
-    public static String simpleName(ClassInfo clazz) {
-        switch (clazz.nestingType()) {
-            case TOP_LEVEL:
-                return simpleName(clazz.name());
-            case INNER:
-                // Nested class
-                // com.foo.Foo$Bar -> Bar
-                return clazz.simpleName();
-            default:
-                throw new IllegalStateException("Unsupported nesting type: " + clazz);
-        }
+    public static String packagePrefix(DotName name) {
+        String result = name.packagePrefix();
+        return result != null ? result : "";
     }
-
-    /**
-     * @param dotName
-     * @see #simpleName(String)
-     */
-    public static String simpleName(DotName dotName) {
-        return simpleName(dotName.toString());
-    }
-
-    /**
-     * Note that dollar sign is a valid character for class names so we cannot detect a nested class here. Therefore, this
-     * method returns "Foo$Bar" for the parameter "com.foo.Foo$Bar". Use {@link #simpleName(ClassInfo)} when you need to
-     * distinguish
-     * the nested classes.
-     *
-     * @param name
-     * @return the simple name
-     */
-    public static String simpleName(String name) {
-        return name.contains(".") ? name.substring(name.lastIndexOf(".") + 1, name.length()) : name;
-    }
-
-    public static String packageName(DotName dotName) {
-        String name = dotName.toString();
-        int index = name.lastIndexOf('.');
-        if (index == -1) {
-            return "";
-        }
-        return name.substring(0, index);
-    }
-
-    /**
-     * Returns a package name with a trailing '/'. If the class is in the default package then this returns
-     * the empty string.
-     * <p>
-     * This method should be used to determine the package to generate classes in to ensure the default package is handled
-     * correctly.
-     */
-    public static String internalPackageNameWithTrailingSlash(DotName dotName) {
-        String name = dotName.toString();
-        int index = name.lastIndexOf('.');
-        if (index == -1) {
-            return "";
-        }
-        return name.substring(0, index).replace('.', '/') + '/';
-    }
-
 }
