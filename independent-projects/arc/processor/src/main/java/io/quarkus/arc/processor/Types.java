@@ -571,10 +571,6 @@ public final class Types {
         return typeParam;
     }
 
-    static String getSimpleName(String className) {
-        return className.contains(".") ? className.substring(className.lastIndexOf(".") + 1) : className;
-    }
-
     static Type box(Type type) {
         if (type.kind() == Kind.PRIMITIVE) {
             return PrimitiveType.box(type.asPrimitiveType());
