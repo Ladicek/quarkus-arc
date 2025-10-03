@@ -49,11 +49,11 @@ public abstract class BeanConfiguratorBase<THIS extends BeanConfiguratorBase<THI
     protected final Set<AnnotationInstance> qualifiers;
     protected ScopeInfo scope;
     protected Boolean alternative;
+    protected Boolean reserve;
     protected final List<StereotypeInfo> stereotypes;
     protected String name;
     protected Consumer<MethodCreator> creatorConsumer;
     protected Consumer<MethodCreator> destroyerConsumer;
-    protected boolean defaultBean;
     protected boolean removable;
     protected Type providerType;
     protected boolean forceApplicationClass;
@@ -94,14 +94,12 @@ public abstract class BeanConfiguratorBase<THIS extends BeanConfiguratorBase<THI
         qualifiers.addAll(base.qualifiers);
         scope = base.scope;
         alternative = base.alternative;
+        reserve = base.reserve;
         stereotypes.clear();
         stereotypes.addAll(base.stereotypes);
         name = base.name;
         creator(base.creatorConsumer);
         destroyer(base.destroyerConsumer);
-        if (base.defaultBean) {
-            defaultBean = true;
-        }
         removable = base.removable;
         providerType = base.providerType;
         forceApplicationClass = base.forceApplicationClass;
@@ -264,8 +262,15 @@ public abstract class BeanConfiguratorBase<THIS extends BeanConfiguratorBase<THI
         return name(name).addQualifier().annotation(DotNames.NAMED).addValue("value", name).done();
     }
 
+    /**
+     * @deprecated use {@link #reserve(boolean)}
+     */
+    @Deprecated
     public THIS defaultBean() {
-        this.defaultBean = true;
+        reserve(true);
+        if (priority == null) {
+            priority(0);
+        }
         return self();
     }
 
@@ -292,6 +297,11 @@ public abstract class BeanConfiguratorBase<THIS extends BeanConfiguratorBase<THI
 
     public THIS alternative(boolean alternative) {
         this.alternative = alternative;
+        return self();
+    }
+
+    public THIS reserve(boolean reserve) {
+        this.reserve = reserve;
         return self();
     }
 
@@ -523,8 +533,8 @@ public abstract class BeanConfiguratorBase<THIS extends BeanConfiguratorBase<THI
      *
      * @param identifier
      * @return self
-     * @see #defaultBean()
      * @see #alternative(boolean)
+     * @see #reserve(boolean)
      */
     public THIS identifier(String identifier) {
         this.identifier = identifier;

@@ -980,7 +980,8 @@ public class BeanDeployment {
                 }
 
                 boolean isAlternative = false;
-                Integer alternativePriority = null;
+                boolean isReserve = false;
+                Integer priority = null;
                 Set<ScopeInfo> scopes = new HashSet<>();
                 List<AnnotationInstance> bindings = new ArrayList<>();
                 List<AnnotationInstance> parentStereotypes = new ArrayList<>();
@@ -989,6 +990,8 @@ public class BeanDeployment {
                 for (AnnotationInstance annotation : annotationStore.getAnnotations(stereotypeClass)) {
                     if (DotNames.ALTERNATIVE.equals(annotation.name())) {
                         isAlternative = true;
+                    } else if (DotNames.RESERVE.equals(annotation.name())) {
+                        isReserve = true;
                     } else if (interceptorBindings.containsKey(annotation.name())) {
                         bindings.add(annotation);
                     } else if (stereotypeNames.contains(annotation.name())) {
@@ -1002,7 +1005,7 @@ public class BeanDeployment {
                         }
                         isNamed = true;
                     } else if (DotNames.PRIORITY.equals(annotation.name())) {
-                        alternativePriority = annotation.value().asInt();
+                        priority = annotation.value().asInt();
                     } else {
                         final ScopeInfo scope = getScope(annotation.name(), customContextScopes);
                         if (scope != null) {
@@ -1013,8 +1016,9 @@ public class BeanDeployment {
                 boolean isAdditionalStereotype = additionalStereotypes.contains(stereotypeName);
                 final ScopeInfo scope = getValidScope(scopes, stereotypeClass);
                 boolean isInherited = stereotypeClass.declaredAnnotation(DotNames.INHERITED) != null;
-                stereotypes.put(stereotypeName, new StereotypeInfo(scope, bindings, isAlternative, alternativePriority,
-                        isNamed, isAdditionalStereotype, stereotypeClass, isInherited, parentStereotypes));
+                stereotypes.put(stereotypeName, new StereotypeInfo(scope, bindings, isAlternative, isReserve,
+                        priority, isNamed, isAdditionalStereotype, stereotypeClass, isInherited,
+                        parentStereotypes));
             }
         }
         return stereotypes;

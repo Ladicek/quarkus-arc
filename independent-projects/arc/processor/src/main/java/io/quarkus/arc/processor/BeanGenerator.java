@@ -323,8 +323,8 @@ public class BeanGenerator extends AbstractGenerator {
         implementGetBeanClass(bean, beanCreator);
         implementGetImplementationClass(bean, beanCreator);
         implementGetName(bean, beanCreator);
-        if (bean.isDefaultBean()) {
-            implementIsDefaultBean(bean, beanCreator);
+        if (bean.isReserve()) {
+            implementIsReserve(bean, beanCreator);
         }
         implementGetKind(beanCreator, InjectableBean.Kind.SYNTHETIC);
         implementEquals(bean, beanCreator);
@@ -416,8 +416,8 @@ public class BeanGenerator extends AbstractGenerator {
         }
         implementGetBeanClass(bean, beanCreator);
         implementGetName(bean, beanCreator);
-        if (bean.isDefaultBean()) {
-            implementIsDefaultBean(bean, beanCreator);
+        if (bean.isReserve()) {
+            implementIsReserve(bean, beanCreator);
         }
 
         implementIsSuppressed(bean, beanCreator);
@@ -505,8 +505,8 @@ public class BeanGenerator extends AbstractGenerator {
         implementGetBeanClass(bean, beanCreator);
         implementGetImplementationClass(bean, beanCreator);
         implementGetName(bean, beanCreator);
-        if (bean.isDefaultBean()) {
-            implementIsDefaultBean(bean, beanCreator);
+        if (bean.isReserve()) {
+            implementIsReserve(bean, beanCreator);
         }
         implementGetKind(beanCreator, InjectableBean.Kind.PRODUCER_METHOD);
         implementIsSuppressed(bean, beanCreator);
@@ -588,8 +588,8 @@ public class BeanGenerator extends AbstractGenerator {
         implementGetBeanClass(bean, beanCreator);
         implementGetImplementationClass(bean, beanCreator);
         implementGetName(bean, beanCreator);
-        if (bean.isDefaultBean()) {
-            implementIsDefaultBean(bean, beanCreator);
+        if (bean.isReserve()) {
+            implementIsReserve(bean, beanCreator);
         }
         implementGetKind(beanCreator, InjectableBean.Kind.PRODUCER_FIELD);
         implementIsSuppressed(bean, beanCreator);
@@ -2205,11 +2205,10 @@ public class BeanGenerator extends AbstractGenerator {
         }
     }
 
-    protected void implementIsDefaultBean(BeanInfo bean, ClassCreator beanCreator) {
-        MethodCreator isDefaultBean = beanCreator.getMethodCreator("isDefaultBean", boolean.class)
+    protected void implementIsReserve(BeanInfo bean, ClassCreator beanCreator) {
+        MethodCreator isReserve = beanCreator.getMethodCreator("isReserve", boolean.class)
                 .setModifiers(ACC_PUBLIC);
-        isDefaultBean
-                .returnValue(isDefaultBean.load(bean.isDefaultBean()));
+        isReserve.returnValue(isReserve.load(bean.isReserve()));
     }
 
     protected void implementGetStereotypes(BeanInfo bean, ClassCreator beanCreator, FieldDescriptor stereotypesField) {
