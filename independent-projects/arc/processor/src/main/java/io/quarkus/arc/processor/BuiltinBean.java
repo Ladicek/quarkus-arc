@@ -69,9 +69,8 @@ public enum BuiltinBean {
             BuiltinBean::validateDecoratedBean, DotNames.BEAN),
     BEAN_MANAGER(BuiltinBean::generateBeanManagerBytecode,
             DotNames.BEAN_MANAGER, DotNames.BEAN_CONTAINER),
-    EVENT(BuiltinBean::generateEventBytecode, DotNames.EVENT),
-    RESOURCE(BuiltinBean::generateResourceBytecode,
-            (ip, names) -> ip.getKind() == InjectionPointKind.RESOURCE,
+    EVENT(BuiltinBean::generateEventBytecode, BuiltinBean::cdiAndRawTypeMatches, BuiltinBean::validateEvent, DotNames.EVENT),
+    RESOURCE(BuiltinBean::generateResourceBytecode, (ip, names) -> ip.getKind() == InjectionPointKind.RESOURCE,
             DotNames.OBJECT),
     EVENT_METADATA(Generator.NOOP, BuiltinBean::cdiAndRawTypeMatches,
             BuiltinBean::validateEventMetadata, DotNames.EVENT_METADATA),
@@ -432,6 +431,12 @@ public enum BuiltinBean {
             ctx.errors.accept(new DefinitionException(
                     "Type variable is not a legal type argument for jakarta.enterprise.inject.Instance: "
                             + ctx.injectionPoint.getTargetInfo()));
+        } else if (ctx.injectionPoint.getRequiredType().name().equals(DotNames.EVENT)
+                && ctx.injectionPoint.getRequiredType().kind() == Kind.PARAMETERIZED_TYPE
+                && ctx.injectionPoint.getRequiredType().asParameterizedType().arguments().get(0).kind() == Kind.WILDCARD_TYPE) {
+            ctx.errors.accept(new DefinitionException(
+                    "jakarta.enterprise.event.Event<?> is not a legal type argument for jakarta.enterprise.inject.Instance: "
+                            + ctx.injectionPoint.getTargetInfo()));
         }
     }
 
@@ -499,6 +504,18 @@ public enum BuiltinBean {
         if (ctx.injectionTarget.kind() != InjectionTargetInfo.TargetKind.BEAN
                 || !ctx.injectionTarget.asBean().isDecorator()) {
             ctx.errors.accept(new DefinitionException("Only decorators can access decorated bean metadata"));
+        }
+    }
+
+    private static void validateEvent(ValidatorContext ctx) {
+        if (ctx.injectionPoint.getType().kind() != Kind.PARAMETERIZED_TYPE) {
+            ctx.errors.accept(new DefinitionException(
+                    "An injection point of raw type jakarta.enterprise.event.Event is defined: "
+                            + ctx.injectionPoint.getTargetInfo()));
+        } else if (ctx.injectionPoint.getType().asParameterizedType().arguments().get(0).kind() == Kind.WILDCARD_TYPE) {
+            ctx.errors.accept(new DefinitionException(
+                    "Wildcard is not a legal type argument for jakarta.enterprise.event.Event: "
+                            + ctx.injectionPoint.getTargetInfo()));
         }
     }
 
