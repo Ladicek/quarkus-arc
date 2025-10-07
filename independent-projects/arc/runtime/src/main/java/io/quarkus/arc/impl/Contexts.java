@@ -115,8 +115,8 @@ class Contexts {
         for (InjectableContext context : contextsForScope) {
             if (context.isActive()) {
                 if (selected != null) {
-                    throw new IllegalArgumentException(
-                            "More than one active context object for the given scope: " + selected + " " + context);
+                    throw new IllegalStateException("More than one active context object for the given scope: "
+                            + selected + " and " + context);
                 }
                 selected = context;
             }
