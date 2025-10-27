@@ -1,6 +1,7 @@
 package io.quarkus.arc.processor.bcextensions;
 
 import jakarta.enterprise.inject.build.compatible.spi.InvokerInfo;
+import jakarta.enterprise.invoke.AsyncHandler;
 import jakarta.enterprise.invoke.InvokerBuilder;
 
 class InvokerBuilderImpl implements InvokerBuilder<InvokerInfo> {
@@ -19,6 +20,15 @@ class InvokerBuilderImpl implements InvokerBuilder<InvokerInfo> {
     @Override
     public InvokerBuilder<InvokerInfo> withArgumentLookup(int position) {
         arcInvokerBuilder.withArgumentLookup(position);
+        return this;
+    }
+
+    @Override
+    public InvokerBuilder<InvokerInfo> withAsync(Class<? extends AsyncHandler> asyncHandler) {
+        // TODO
+        if (true) {
+            throw new UnsupportedOperationException("Not yet implemented");
+        }
         return this;
     }
 
