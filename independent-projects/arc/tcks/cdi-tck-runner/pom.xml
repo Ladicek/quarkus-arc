@@ -36,8 +36,8 @@
             <artifactId>arc-cdi-tck-porting-pkg</artifactId>
         </dependency>
         <dependency>
-            <groupId>jakarta.enterprise</groupId>
-            <artifactId>cdi-tck-core-impl</artifactId>
+            <groupId>jakarta.cdi</groupId>
+            <artifactId>jakarta.cdi-tck-core-impl</artifactId>
             <version>${version.cdi-tck}</version>
         </dependency>
     </dependencies>
