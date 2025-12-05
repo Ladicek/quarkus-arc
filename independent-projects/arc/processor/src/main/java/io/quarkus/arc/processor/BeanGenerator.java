@@ -1485,15 +1485,16 @@ public class BeanGenerator extends AbstractGenerator {
             ParamVar providerParam = mc.parameter("provider", classDescOf(bean.getProviderType()));
             ParamVar ccParam = mc.parameter("creationalContext", CreationalContext.class);
             mc.body(b0 -> {
+                // in case someone calls `Bean.destroy()` directly (i.e., they use the low-level CDI API),
+                // they may pass us a client proxy
+                Var instance = bean.getScope().isNormal()
+                        ? b0.localVar("instance", b0.invokeStatic(MethodDescs.CLIENT_PROXY_UNWRAP, providerParam))
+                        : providerParam;
+
                 b0.try_(tc -> {
                     tc.body(b1 -> {
                         if (bean.isClassBean()) {
                             if (!bean.isInterceptor()) {
-                                // in case someone calls `Bean.destroy()` directly (i.e., they use the low-level CDI API),
-                                // they may pass us a client proxy
-                                LocalVar instance = b1.localVar("instance",
-                                        b1.invokeStatic(MethodDescs.CLIENT_PROXY_UNWRAP, providerParam));
-
                                 class PreDestroyGenerator {
                                     void generate(BlockCreator bc, Var instance) {
                                         // PreDestroy callbacks
@@ -1536,6 +1537,8 @@ public class BeanGenerator extends AbstractGenerator {
                                     ClassDesc subclass = ClassDesc.of(SubclassGenerator.generatedName(
                                             bean.getProviderType().name(), baseName));
 
+                                    Expr subclassInstance = b1.cast(instance, subclass);
+
                                     // if there _is_ some `@PreDestroy` interceptor, however, we'll reify the chain of `@PreDestroy`
                                     // callbacks into a `Runnable` that we pass into the interceptor chain to be called
                                     // by the last `proceed()` call:
@@ -1555,13 +1558,9 @@ public class BeanGenerator extends AbstractGenerator {
                                     });
 
                                     b1.invokeVirtual(ClassMethodDesc.of(subclass, SubclassGenerator.DESTROY_METHOD_NAME,
-                                            void.class, Runnable.class), instance, runnable);
+                                            void.class, Runnable.class), subclassInstance, runnable);
                                 }
                             }
-
-                            // ctx.release()
-                            b1.invokeInterface(MethodDescs.CREATIONAL_CTX_RELEASE, ccParam);
-                            b1.return_();
                         } else if (bean.getDisposer() != null) {
                             // Invoke the disposer method
                             // declaringProvider.get(new CreationalContextImpl<>()).dispose()
@@ -1596,7 +1595,7 @@ public class BeanGenerator extends AbstractGenerator {
                                     .getInjection().injectionPoints.iterator();
                             for (int i = 0; i < disposerMethod.parametersCount(); i++) {
                                 if (i == disposedParamPosition) {
-                                    disposerArgs[i] = providerParam;
+                                    disposerArgs[i] = instance;
                                 } else {
                                     InjectionPointInfo injectionPoint = injectionPointsIterator.next();
                                     Expr providerSupplier = cc.this_().field(injectionPointToProviderField.get(injectionPoint));
@@ -1642,9 +1641,6 @@ public class BeanGenerator extends AbstractGenerator {
                                 b1.invokeInterface(MethodDescs.INJECTABLE_BEAN_DESTROY, declaringProvider,
                                         declaringProviderInstance, parentCC);
                             }
-                            // ctx.release()
-                            b1.invokeInterface(MethodDescs.CREATIONAL_CTX_RELEASE, ccParam);
-                            b1.return_();
                         } else if (bean.isSynthetic()) {
                             LocalVar synthCC = createSyntheticCreationalContext(cc, bean, injectionPointToProviderField,
                                     ccParam, b1);
@@ -1662,7 +1658,7 @@ public class BeanGenerator extends AbstractGenerator {
 
                                 @Override
                                 public Var destroyedInstance() {
-                                    return providerParam;
+                                    return instance;
                                 }
 
                                 @Override
@@ -1687,6 +1683,53 @@ public class BeanGenerator extends AbstractGenerator {
                         });
                     });
                 });
+
+                if (bean.isAutoClose()) {
+                    b0.try_(tc -> {
+                        tc.body(b1 -> {
+                            b1.ifInstanceOf(instance, AutoCloseable.class, (b2, cast) -> {
+                                b2.invokeInterface(MethodDescs.AUTO_CLOSEABLE_CLOSE, cast);
+                            });
+                        });
+                        tc.catch_(Throwable.class, "e", (b1, e) -> {
+                            Const error = Const.of("Error occurred while destroying instance of " + bean);
+                            LocalVar logger = b1.localVar("logger",
+                                    Expr.staticField(FieldDesc.of(UncaughtExceptions.class, "LOGGER")));
+                            Expr isDebugEnabled = b1.invokeVirtual(MethodDesc.of(Logger.class, "isDebugEnabled", boolean.class),
+                                    logger);
+                            b1.ifElse(isDebugEnabled, b2 -> {
+                                b2.invokeVirtual(
+                                        MethodDesc.of(Logger.class, "error", void.class, Object.class, Throwable.class),
+                                        logger, error, e);
+                            }, b2 -> {
+                                b2.invokeVirtual(MethodDesc.of(Logger.class, "error", void.class, Object.class), logger,
+                                        StringBuilderGen.ofNew(b2).append(error).append(": ").append(e).toString_());
+                            });
+                        });
+                    });
+                }
+
+                b0.try_(tc -> {
+                    tc.body(b1 -> {
+                        // ctx.release()
+                        b1.invokeInterface(MethodDescs.CREATIONAL_CTX_RELEASE, ccParam);
+                    });
+                    tc.catch_(Throwable.class, "e", (b1, e) -> {
+                        Const error = Const.of("Error occurred while destroying instance of " + bean);
+                        LocalVar logger = b1.localVar("logger",
+                                Expr.staticField(FieldDesc.of(UncaughtExceptions.class, "LOGGER")));
+                        Expr isDebugEnabled = b1.invokeVirtual(MethodDesc.of(Logger.class, "isDebugEnabled", boolean.class),
+                                logger);
+                        b1.ifElse(isDebugEnabled, b2 -> {
+                            b2.invokeVirtual(MethodDesc.of(Logger.class, "error", void.class, Object.class, Throwable.class),
+                                    logger, error, e);
+                        }, b2 -> {
+                            b2.invokeVirtual(MethodDesc.of(Logger.class, "error", void.class, Object.class), logger,
+                                    StringBuilderGen.ofNew(b2).append(error).append(": ").append(e).toString_());
+                        });
+                    });
+                });
+
                 b0.return_();
             });
         });
