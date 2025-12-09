@@ -23,7 +23,7 @@ public final class Qualifiers {
     public static final Set<Annotation> IP_DEFAULT_QUALIFIERS = Set.of(Default.Literal.INSTANCE);
 
     final Set<String> allQualifiers;
-    // custom qualifier -> non-binding members (can be empty but never null)
+    // qualifier class name -> non-binding members (can be empty but never null)
     final Map<String, Set<String>> qualifierNonbindingMembers;
 
     Qualifiers(Set<String> qualifiers, Map<String, Set<String>> qualifierNonbindingMembers) {
@@ -91,7 +91,6 @@ public final class Qualifiers {
     }
 
     boolean hasQualifier(Iterable<Annotation> qualifiers, Annotation requiredQualifier) {
-
         Class<? extends Annotation> requiredQualifierClass = requiredQualifier.annotationType();
         Method[] members = requiredQualifierClass.getDeclaredMethods();
 
@@ -102,6 +101,8 @@ public final class Qualifiers {
             }
             boolean matches = true;
             for (Method value : members) {
+                // `qualifierNonbindingMembers` contains all qualifiers, but this must still be present,
+                // because this method is also called from `ArcContainerImpl.hasAllInterceptionBindings()`
                 if (value.isAnnotationPresent(Nonbinding.class)) {
                     continue;
                 }

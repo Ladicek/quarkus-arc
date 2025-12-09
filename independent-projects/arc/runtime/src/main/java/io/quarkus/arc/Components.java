@@ -65,7 +65,7 @@ public final class Components {
     /**
      * Values in the map are never null.
      *
-     * @return a map of fully-qualified class names of all custom qualifiers to the set of non-binding members
+     * @return a map of fully-qualified class names of all qualifiers to the set of their non-binding members
      * @see jakarta.enterprise.util.Nonbinding
      */
     public Map<String, Set<String>> getQualifierNonbindingMembers() {
@@ -74,7 +74,7 @@ public final class Components {
 
     /**
      *
-     * @return the set of fully-qualified class names of all registered qualifiers
+     * @return the set of fully-qualified class names of all qualifiers
      */
     public Set<String> getQualifiers() {
         return qualifiers;
