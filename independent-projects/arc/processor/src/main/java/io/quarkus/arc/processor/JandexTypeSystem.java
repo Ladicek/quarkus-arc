@@ -24,12 +24,15 @@ import org.jboss.jandex.Type;
 import org.jboss.jandex.TypeVariable;
 import org.jboss.jandex.WildcardType;
 
+import io.smallrye.common.annotation.Experimental;
+
 // first attempt at creating a type system API for Jandex, includes the bare minimum for validating decorators
 // it should be replaced by a proper API in Jandex one day, see https://github.com/smallrye/jandex/issues/625
-final class JandexTypeSystem {
+@Experimental("this class must not be used outside ArC, it will be removed without prior notice")
+public final class JandexTypeSystem {
     private final IndexView index;
 
-    static JandexTypeSystem of(IndexView index) {
+    public static JandexTypeSystem of(IndexView index) {
         Objects.requireNonNull(index);
         return new JandexTypeSystem(index);
     }
@@ -50,7 +53,7 @@ final class JandexTypeSystem {
      * <li>superinterface types, in an unspecified order (if {@code skipInterfaces == false})</li>
      * </ol>
      */
-    List<Type> typeWithSuperTypes(Type type, boolean skipInterfaces) {
+    public List<Type> typeWithSuperTypes(Type type, boolean skipInterfaces) {
         Objects.requireNonNull(type);
         if (type.kind() != Type.Kind.CLASS && type.kind() != Type.Kind.PARAMETERIZED_TYPE) {
             throw new IllegalArgumentException("Type must be class or parameterized, got " + type.kind() + ": " + type);
