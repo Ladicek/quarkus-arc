@@ -3,6 +3,7 @@ package io.quarkus.arc.processor.bcextensions;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -63,11 +64,11 @@ class ExtensionPhaseRegistration extends ExtensionPhaseBase {
 
         List<?> allValuesForQueryParameter = Collections.emptyList();
         if (query == ExtensionMethodParameter.BEAN_INFO) {
-            allValuesForQueryParameter = matchingBeans(method.jandex, false);
+            allValuesForQueryParameter = matchingBeans(method, false);
         } else if (query == ExtensionMethodParameter.INTERCEPTOR_INFO) {
-            allValuesForQueryParameter = matchingBeans(method.jandex, true);
+            allValuesForQueryParameter = matchingBeans(method, true);
         } else if (query == ExtensionMethodParameter.OBSERVER_INFO) {
-            allValuesForQueryParameter = matchingObservers(method.jandex);
+            allValuesForQueryParameter = matchingObservers(method);
         }
 
         for (Object queryParameterValue : allValuesForQueryParameter) {
@@ -83,14 +84,27 @@ class ExtensionPhaseRegistration extends ExtensionPhaseBase {
         }
     }
 
-    private Set<org.jboss.jandex.Type> expectedTypes(org.jboss.jandex.MethodInfo jandexMethod) {
-        org.jboss.jandex.Type[] annotationValue = jandexMethod.annotation(DotNames.REGISTRATION)
+    private Set<org.jboss.jandex.Type> expectedTypes(ExtensionMethod method) {
+        Set<org.jboss.jandex.Type> result = new HashSet<>();
+        org.jboss.jandex.Type[] types = method.jandex.annotation(DotNames.REGISTRATION)
                 .value("types").asClassArray();
-        return Set.of(annotationValue);
+        for (org.jboss.jandex.Type type : types) {
+            org.jboss.jandex.ClassInfo clazz = index.getClassByName(type.name());
+            if (clazz != null && DotNames.TYPE_LITERAL.equals(clazz.superName())) {
+                org.jboss.jandex.Type typeLiteral = clazz.superClassType();
+                if (typeLiteral.kind() != org.jboss.jandex.Type.Kind.PARAMETERIZED_TYPE) {
+                    throw new DefinitionException("Raw TypeLiteral in @Registration.types on " + method);
+                }
+                result.add(typeLiteral.asParameterizedType().arguments().get(0));
+            } else {
+                result.add(type);
+            }
+        }
+        return result;
     }
 
-    private List<BeanInfo> matchingBeans(org.jboss.jandex.MethodInfo jandexMethod, boolean onlyInterceptors) {
-        Set<org.jboss.jandex.Type> expectedTypes = expectedTypes(jandexMethod);
+    private List<BeanInfo> matchingBeans(ExtensionMethod method, boolean onlyInterceptors) {
+        Set<org.jboss.jandex.Type> expectedTypes = expectedTypes(method);
         return Stream.concat(allBeans.stream(), allInterceptors.stream())
                 .filter(bean -> {
                     if (onlyInterceptors && !bean.isInterceptor()) {
@@ -107,12 +121,13 @@ class ExtensionPhaseRegistration extends ExtensionPhaseBase {
                 .toList();
     }
 
-    private List<ObserverInfo> matchingObservers(org.jboss.jandex.MethodInfo jandexMethod) {
-        Set<org.jboss.jandex.Type> expectedTypes = expectedTypes(jandexMethod);
+    private List<ObserverInfo> matchingObservers(ExtensionMethod method) {
+        Set<org.jboss.jandex.Type> expectedTypes = expectedTypes(method);
         return allObservers.stream()
                 .filter(observer -> {
                     org.jboss.jandex.Type observedType = observer.getObservedType();
                     for (org.jboss.jandex.Type expectedType : expectedTypes) {
+                        // note that this is imprecise when parameterized types are used (not often, but possible)
                         if (assignability.isAssignableFrom(expectedType, observedType)) {
                             return true;
                         }

@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.Initialized;
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Produces;
@@ -20,6 +21,7 @@ import jakarta.enterprise.inject.build.compatible.spi.Messages;
 import jakarta.enterprise.inject.build.compatible.spi.ObserverInfo;
 import jakarta.enterprise.inject.build.compatible.spi.Registration;
 import jakarta.enterprise.inject.build.compatible.spi.Types;
+import jakarta.enterprise.util.TypeLiteral;
 import jakarta.inject.Qualifier;
 import jakarta.inject.Singleton;
 import jakarta.interceptor.AroundInvoke;
@@ -36,13 +38,15 @@ public class RegistrationTest {
     @RegisterExtension
     public ArcTestContainer container = ArcTestContainer.builder()
             .beanClasses(MyQualifier.class, MyInterceptorBinding.class, MyInterceptor.class, MyService.class,
-                    MyFooService.class, MyBarService.class, MyBarServiceProducer.class)
+                    MyGenericService.class, MyFooService.class, MyBarService.class, MyBarServiceProducer.class,
+                    MyBazService.class)
             .buildCompatibleExtensions(new MyExtension())
             .build();
 
     @Test
     public void test() {
         assertEquals(2, MyExtension.beanCounter.get());
+        assertEquals(3, MyExtension.genericBeanCounter.get());
         assertEquals(1, MyExtension.beanMyQualifierCounter.get());
         assertEquals(1, MyExtension.observerQualifierCounter.get());
         assertEquals(2, MyExtension.interceptorCounter.get()); // one interceptor, counted twice
@@ -50,6 +54,7 @@ public class RegistrationTest {
 
     public static class MyExtension implements BuildCompatibleExtension {
         static final AtomicInteger beanCounter = new AtomicInteger();
+        static final AtomicInteger genericBeanCounter = new AtomicInteger();
         static final AtomicInteger beanMyQualifierCounter = new AtomicInteger();
         static final AtomicInteger observerQualifierCounter = new AtomicInteger();
         static final AtomicInteger interceptorCounter = new AtomicInteger();
@@ -61,6 +66,22 @@ public class RegistrationTest {
             if (bean.qualifiers().stream().anyMatch(it -> it.name().equals(MyQualifier.class.getName()))) {
                 beanMyQualifierCounter.incrementAndGet();
             }
+        }
+
+        @Registration(types = MyGenericServiceOfString.class)
+        public void genericBeans1(BeanInfo bean) {
+            genericBeanCounter.incrementAndGet();
+        }
+
+        @Registration(types = MyGenericServiceOfT.class)
+        public void genericBeans2(BeanInfo bean) {
+            genericBeanCounter.incrementAndGet();
+        }
+
+        static class MyGenericServiceOfString extends TypeLiteral<MyGenericService<String>> {
+        }
+
+        static class MyGenericServiceOfT<T> extends TypeLiteral<MyGenericService<T>> {
         }
 
         @Registration(types = Object.class)
@@ -111,8 +132,12 @@ public class RegistrationTest {
         String hello();
     }
 
+    public interface MyGenericService<T> {
+        T hello();
+    }
+
     @Singleton
-    public static class MyFooService implements MyService {
+    public static class MyFooService implements MyService, MyGenericService<String> {
         @Override
         public String hello() {
             return "foo";
@@ -123,7 +148,7 @@ public class RegistrationTest {
     }
 
     // intentionally not a bean, to test that producer-based bean is processed
-    public static class MyBarService implements MyService {
+    public static class MyBarService implements MyService, MyGenericService<String> {
         @Override
         public String hello() {
             return "bar";
@@ -137,6 +162,14 @@ public class RegistrationTest {
         @MyQualifier
         public MyBarService produce() {
             return new MyBarService();
+        }
+    }
+
+    @Dependent
+    public static class MyBazService<T> implements MyGenericService<T> {
+        @Override
+        public T hello() {
+            return null;
         }
     }
 }
