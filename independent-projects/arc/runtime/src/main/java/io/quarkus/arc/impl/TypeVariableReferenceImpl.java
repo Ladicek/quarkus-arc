@@ -45,7 +45,7 @@ public class TypeVariableReferenceImpl<D extends GenericDeclaration> implements 
 
     @Override
     public String getName() {
-        return delegate.getName();
+        return name;
     }
 
     @Override
